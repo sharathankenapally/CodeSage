@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Legacy Java Modernization Agent"
+version = "1.0.0"
+id = "artifacts/java-modernization"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 25635
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/java-modernization run dev"
+
+[services.env]
+PORT = "25635"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/java-modernization", "run", "build"]
+publicDir = "artifacts/java-modernization/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

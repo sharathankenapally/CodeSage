@@ -1,0 +1,17 @@
+packages:
+  "react-markdown": "Render markdown results from the AI analysis"
+  "framer-motion": "Smooth page transitions, tab animations, and streaming console reveals"
+  "@hookform/resolvers": "Zod validation for forms"
+  "date-fns": "Format dates for analysis sessions"
+  "clsx": "Class merging for UI components"
+  "tailwind-merge": "Class merging for UI components"
+  "lucide-react": "Beautiful consistent iconography"
+
+images:
+  - path: "artifacts/java-modernization/public/images/logo.png"
+    description: "Minimalist glowing geometric isometric cube logo in cyan and deep purple on a very dark background, representing structural code modernization"
+    aspect_ratio: "1:1"
+
+notes:
+  - "The API provides generated React Query hooks in @workspace/api-client-react, but we wrap the underlying fetchers in our own hooks to automatically handle TanStack Query cache invalidation."
+  - "SSE streaming is implemented using the Fetch API and ReadableStream since standard EventSource doesn't support POST requests easily."
