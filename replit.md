@@ -48,7 +48,26 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Features
+
+- **Analysis Sessions** — Create and manage multiple modernization sessions
+- **GitHub Import** — Import Java files directly from any public or private GitHub repo via `POST /api/github/fetch`
+- **Code Paste** — Alternatively paste Java code directly into the form
+- **6-Step AI Analysis** — Each step uses GPT-5.2 to produce structured Markdown output:
+  1. Repository Discovery
+  2. Business Logic Classification
+  3. Business Rule Extraction
+  4. Memory Store Dependency Map
+  5. Microservice Grouping Proposal
+  6. English Requirements Document
+- **SSE Streaming** — Analysis results stream in real time to the browser
+- **Result Download** — Download individual step results as `.md` files
+
 ## Packages
+
+### `artifacts/java-modernization` (`@workspace/java-modernization`)
+
+React + Vite frontend at `/`. Handles the full user workflow: create analysis, add repos (GitHub or paste), run AI analysis steps, view and download results.
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 

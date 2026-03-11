@@ -12,5 +12,7 @@ export * from "./analysisStatus";
 export * from "./createAnalysisBody";
 export * from "./createRepositoryBody";
 export * from "./errorResponse";
+export * from "./fetchGithubRepoBody";
+export * from "./fetchGithubRepoResponse";
 export * from "./healthStatus";
 export * from "./repository";

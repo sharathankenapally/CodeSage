@@ -117,6 +117,39 @@ export const ListResultsResponseItem = zod.object({
 export const ListResultsResponse = zod.array(ListResultsResponseItem);
 
 /**
+ * @summary Fetch Java files from a GitHub repository
+ */
+export const FetchGithubRepoBody = zod.object({
+  repoUrl: zod
+    .string()
+    .describe("GitHub repository URL (e.g. https:\/\/github.com\/owner\/repo)"),
+  branch: zod
+    .string()
+    .nullish()
+    .describe("Branch to fetch (defaults to the repo default branch)"),
+  githubToken: zod
+    .string()
+    .nullish()
+    .describe("Optional GitHub personal access token for private repos"),
+  maxFiles: zod
+    .number()
+    .nullish()
+    .describe("Maximum number of Java files to fetch (default 100)"),
+});
+
+export const FetchGithubRepoResponse = zod.object({
+  name: zod.string().describe("Repository name (owner\/repo)"),
+  javaCode: zod
+    .string()
+    .describe("Concatenated Java source code from all .java files"),
+  packageStructure: zod.string().describe("File tree of the repository"),
+  fileCount: zod.number().describe("Number of Java files fetched"),
+  truncated: zod
+    .boolean()
+    .describe("Whether the fetch was truncated due to maxFiles limit"),
+});
+
+/**
  * @summary Run a specific analysis step (SSE streaming)
  */
 export const runAnalysisStepPathStepMax = 6;

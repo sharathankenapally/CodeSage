@@ -66,3 +66,36 @@ export interface AnalysisResult {
   content: string;
   createdAt: string;
 }
+
+export interface FetchGithubRepoBody {
+  /** GitHub repository URL (e.g. https://github.com/owner/repo) */
+  repoUrl: string;
+  /**
+   * Branch to fetch (defaults to the repo default branch)
+   * @nullable
+   */
+  branch?: string | null;
+  /**
+   * Optional GitHub personal access token for private repos
+   * @nullable
+   */
+  githubToken?: string | null;
+  /**
+   * Maximum number of Java files to fetch (default 100)
+   * @nullable
+   */
+  maxFiles?: number | null;
+}
+
+export interface FetchGithubRepoResponse {
+  /** Repository name (owner/repo) */
+  name: string;
+  /** Concatenated Java source code from all .java files */
+  javaCode: string;
+  /** File tree of the repository */
+  packageStructure: string;
+  /** Number of Java files fetched */
+  fileCount: number;
+  /** Whether the fetch was truncated due to maxFiles limit */
+  truncated: boolean;
+}

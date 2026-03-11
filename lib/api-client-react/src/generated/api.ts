@@ -22,6 +22,8 @@ import type {
   CreateAnalysisBody,
   CreateRepositoryBody,
   ErrorResponse,
+  FetchGithubRepoBody,
+  FetchGithubRepoResponse,
   HealthStatus,
   Repository,
 } from "./api.schemas";
@@ -788,6 +790,92 @@ export function useListResults<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Fetch Java files from a GitHub repository
+ */
+export const getFetchGithubRepoUrl = () => {
+  return `/api/github/fetch`;
+};
+
+export const fetchGithubRepo = async (
+  fetchGithubRepoBody: FetchGithubRepoBody,
+  options?: RequestInit,
+): Promise<FetchGithubRepoResponse> => {
+  return customFetch<FetchGithubRepoResponse>(getFetchGithubRepoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fetchGithubRepoBody),
+  });
+};
+
+export const getFetchGithubRepoMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fetchGithubRepo>>,
+    TError,
+    { data: BodyType<FetchGithubRepoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof fetchGithubRepo>>,
+  TError,
+  { data: BodyType<FetchGithubRepoBody> },
+  TContext
+> => {
+  const mutationKey = ["fetchGithubRepo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof fetchGithubRepo>>,
+    { data: BodyType<FetchGithubRepoBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return fetchGithubRepo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FetchGithubRepoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof fetchGithubRepo>>
+>;
+export type FetchGithubRepoMutationBody = BodyType<FetchGithubRepoBody>;
+export type FetchGithubRepoMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Fetch Java files from a GitHub repository
+ */
+export const useFetchGithubRepo = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fetchGithubRepo>>,
+    TError,
+    { data: BodyType<FetchGithubRepoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof fetchGithubRepo>>,
+  TError,
+  { data: BodyType<FetchGithubRepoBody> },
+  TContext
+> => {
+  return useMutation(getFetchGithubRepoMutationOptions(options));
+};
 
 /**
  * @summary Run a specific analysis step (SSE streaming)

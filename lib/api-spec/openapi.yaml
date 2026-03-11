@@ -208,6 +208,37 @@ paths:
                 items:
                   $ref: "#/components/schemas/AnalysisResult"
 
+  /github/fetch:
+    post:
+      operationId: fetchGithubRepo
+      tags: [analyses]
+      summary: Fetch Java files from a GitHub repository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FetchGithubRepoBody"
+      responses:
+        "200":
+          description: Repository Java code fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FetchGithubRepoResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Could not fetch repository
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /analyze/{id}/step/{step}:
     post:
       operationId: runAnalysisStep
@@ -385,3 +416,46 @@ components:
         - stepName
         - content
         - createdAt
+
+    FetchGithubRepoBody:
+      type: object
+      properties:
+        repoUrl:
+          type: string
+          description: "GitHub repository URL (e.g. https://github.com/owner/repo)"
+        branch:
+          type: ["string", "null"]
+          description: "Branch to fetch (defaults to the repo default branch)"
+        githubToken:
+          type: ["string", "null"]
+          description: "Optional GitHub personal access token for private repos"
+        maxFiles:
+          type: ["integer", "null"]
+          description: "Maximum number of Java files to fetch (default 100)"
+      required:
+        - repoUrl
+
+    FetchGithubRepoResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          description: "Repository name (owner/repo)"
+        javaCode:
+          type: string
+          description: "Concatenated Java source code from all .java files"
+        packageStructure:
+          type: string
+          description: "File tree of the repository"
+        fileCount:
+          type: integer
+          description: "Number of Java files fetched"
+        truncated:
+          type: boolean
+          description: "Whether the fetch was truncated due to maxFiles limit"
+      required:
+        - name
+        - javaCode
+        - packageStructure
+        - fileCount
+        - truncated
