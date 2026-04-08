@@ -57,8 +57,9 @@ async function githubFetch(path: string, token?: string | null): Promise<globalT
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "PythonCodeAnalyzer/1.0",
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  const resolvedToken = token || process.env.GITHUB_TOKEN;
+  if (resolvedToken) {
+    headers["Authorization"] = `Bearer ${resolvedToken}`;
   }
   return fetch(`https://api.github.com${path}`, { headers });
 }
