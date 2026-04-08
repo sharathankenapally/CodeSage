@@ -48,26 +48,46 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Application
+
+**PyAnalyzer** — AI-powered Python codebase analysis tool. Analyzes Python repositories (via GitHub import or code paste) and produces structured business rules and requirements documents using GPT-4o.
+
 ## Features
 
-- **Analysis Sessions** — Create and manage multiple modernization sessions
-- **GitHub Import** — Import Java files directly from any public or private GitHub repo via `POST /api/github/fetch`
-- **Code Paste** — Alternatively paste Java code directly into the form
-- **6-Step AI Analysis** — Each step uses GPT-5.2 to produce structured Markdown output:
-  1. Repository Discovery
-  2. Business Logic Classification
-  3. Business Rule Extraction
-  4. Memory Store Dependency Map
-  5. Microservice Grouping Proposal
-  6. English Requirements Document
-- **SSE Streaming** — Analysis results stream in real time to the browser
+- **Analysis Sessions** — Create and manage multiple analysis sessions for different Python projects
+- **GitHub Import** — Fetch all `.py` files from any public/private GitHub repo via `POST /api/github/fetch`; ignores `__pycache__`, `venv`, `migrations`, `build/dist` folders
+- **Code Paste** — Alternatively paste Python source code directly
+- **6-Step AI Analysis** — Each step builds on the previous, using GPT-4o with SSE streaming:
+  1. Repository Discovery — Inventory all modules, classes, functions, imports
+  2. Business Logic Classification — Classify each function as Business Rule, Orchestration, or exclude
+  3. Business Rule Extraction — Document each rule: inputs, outputs, edge cases, suggested service
+  4. Memory & State Dependency Map — Map dicts, global vars, caches, and cross-module state
+  5. Microservice Grouping Proposal — Group rules into logical bounded-context services
+  6. Requirements Document — Plain-English functional requirements per service
+- **SSE Streaming** — Results stream token-by-token to the browser in real time
 - **Result Download** — Download individual step results as `.md` files
+
+## Python Analysis Engine (`ai_code_analyzer/`)
+
+Standalone Python package that can be used independently of the web app.
+
+```text
+ai_code_analyzer/
+├── main.py            # CLI entry: python -m ai_code_analyzer.main --repo <url>
+├── repo_manager.py    # Clones/fetches Python files from GitHub
+├── code_parser.py     # AST-based parser: extracts classes, functions, imports, constants
+├── ai_analyzer.py     # Sends code to OpenAI API for 6-step analysis
+├── report_generator.py # Writes Markdown reports to outputs/
+├── config.py          # Config: OPENAI_API_KEY, GITHUB_TOKEN, REPO_URL, etc.
+├── requirements.txt   # openai, requests
+└── outputs/           # Generated reports (created on first run)
+```
 
 ## Packages
 
 ### `artifacts/java-modernization` (`@workspace/java-modernization`)
 
-React + Vite frontend at `/`. Handles the full user workflow: create analysis, add repos (GitHub or paste), run AI analysis steps, view and download results.
+React + Vite frontend at `/`. Handles the full user workflow: create analysis sessions, import Python repos (GitHub or paste), run 6-step AI analysis, view and download results as Markdown.
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 

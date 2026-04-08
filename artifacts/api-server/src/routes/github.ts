@@ -20,6 +20,14 @@ interface GithubFileContent {
   encoding: string;
 }
 
+const PYTHON_EXTENSIONS = [".py"];
+const IGNORE_PATHS = ["__pycache__", ".egg-info", "migrations", "node_modules", ".git", "venv", ".venv", "dist", "build"];
+
+function isPythonFile(path: string): boolean {
+  if (IGNORE_PATHS.some((ignore) => path.includes(ignore))) return false;
+  return PYTHON_EXTENSIONS.some((ext) => path.endsWith(ext));
+}
+
 function parseGithubUrl(url: string): { owner: string; repo: string } | null {
   try {
     const cleaned = url.trim().replace(/\.git$/, "").replace(/\/$/, "");
@@ -31,11 +39,11 @@ function parseGithubUrl(url: string): { owner: string; repo: string } | null {
   }
 }
 
-async function githubFetch(path: string, token?: string | null): Promise<Response | globalThis.Response> {
+async function githubFetch(path: string, token?: string | null): Promise<globalThis.Response> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "JavaModernizationAgent/1.0",
+    "User-Agent": "PythonCodeAnalyzer/1.0",
   };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -61,17 +69,16 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
 
   const { owner, repo } = parts;
 
-  // Get default branch if not specified
   let targetBranch = branch;
   if (!targetBranch) {
     const repoResp = await githubFetch(`/repos/${owner}/${repo}`, githubToken);
     if (!repoResp.ok) {
-      const errText = await repoResp.text();
       if (repoResp.status === 404) {
-        res.status(422).json({ error: `Repository not found: ${owner}/${repo}. Check the URL or make sure your token has access.` });
+        res.status(422).json({ error: `Repository not found: ${owner}/${repo}. Check the URL or ensure your token has access.` });
       } else if (repoResp.status === 403) {
         res.status(422).json({ error: "GitHub API rate limit exceeded. Provide a GitHub token to increase your rate limit." });
       } else {
+        const errText = await repoResp.text();
         res.status(422).json({ error: `GitHub API error: ${errText}` });
       }
       return;
@@ -80,7 +87,6 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
     targetBranch = repoData.default_branch;
   }
 
-  // Get full file tree
   const treeResp = await githubFetch(
     `/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`,
     githubToken
@@ -93,25 +99,23 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
   }
 
   const treeData = await treeResp.json() as GithubTreeResponse;
-  const javaFiles = treeData.tree
-    .filter((item) => item.type === "blob" && item.path.endsWith(".java"))
+  const pythonFiles = treeData.tree
+    .filter((item) => item.type === "blob" && isPythonFile(item.path))
     .slice(0, limit);
 
-  if (javaFiles.length === 0) {
-    res.status(422).json({ error: `No .java files found in ${owner}/${repo} on branch '${targetBranch}'.` });
+  if (pythonFiles.length === 0) {
+    res.status(422).json({ error: `No Python (.py) files found in ${owner}/${repo} on branch '${targetBranch}'.` });
     return;
   }
 
-  // Build package structure tree string
-  const filePaths = javaFiles.map((f) => f.path);
+  const filePaths = pythonFiles.map((f) => f.path);
   const packageStructure = buildFileTree(filePaths);
 
-  // Fetch each file's content concurrently (in batches of 10)
   const codeParts: string[] = [];
   const batchSize = 10;
 
-  for (let i = 0; i < javaFiles.length; i += batchSize) {
-    const batch = javaFiles.slice(i, i + batchSize);
+  for (let i = 0; i < pythonFiles.length; i += batchSize) {
+    const batch = pythonFiles.slice(i, i + batchSize);
     const results = await Promise.allSettled(
       batch.map(async (file) => {
         const fileResp = await githubFetch(
@@ -122,7 +126,7 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
         const fileData = await fileResp.json() as GithubFileContent;
         if (fileData.encoding === "base64") {
           const decoded = Buffer.from(fileData.content.replace(/\n/g, ""), "base64").toString("utf-8");
-          return `// ===== FILE: ${file.path} =====\n${decoded}\n`;
+          return `# ===== FILE: ${file.path} =====\n${decoded}\n`;
         }
         return null;
       })
@@ -136,7 +140,7 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
   }
 
   const javaCode = codeParts.join("\n");
-  const isTruncated = treeData.truncated || javaFiles.length === limit;
+  const isTruncated = treeData.truncated || pythonFiles.length === limit;
 
   res.json({
     name: `${owner}/${repo}`,

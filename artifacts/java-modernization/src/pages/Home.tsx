@@ -10,9 +10,9 @@ export default function Home() {
              <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-accent/20 opacity-50"></div>
              <Code2 className="w-10 h-10 text-white relative z-10" />
           </div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">Legacy Java Modernization</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-white">Python Code Analyzer</h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Select an analysis session from the sidebar or create a new one to begin migrating your monolithic Java 8 codebases to microservices.
+            Select an analysis session from the sidebar or create a new one to begin extracting business rules and requirements from your Python codebase.
           </p>
           <div className="pt-4 flex items-center justify-center text-sm font-medium text-primary gap-2">
             <ArrowRight className="w-4 h-4 animate-pulse" />

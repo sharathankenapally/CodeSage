@@ -44,7 +44,7 @@ export default function CreateAnalysisDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Create Analysis Session</DialogTitle>
           <DialogDescription>
-            Start a new legacy modernization project. You can add code repositories in the next step.
+            Start a new Python codebase analysis. You can import repositories in the next step.
           </DialogDescription>
         </DialogHeader>
         
@@ -57,7 +57,7 @@ export default function CreateAnalysisDialog({ open, onOpenChange }: Props) {
                 <FormItem>
                   <FormLabel>Session Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Order Management Migration" className="bg-black/20" {...field} />
+                    <Input placeholder="e.g. Payment Service Analysis" className="bg-black/20" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -70,7 +70,7 @@ export default function CreateAnalysisDialog({ open, onOpenChange }: Props) {
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Context about this codebase..." className="resize-none bg-black/20" {...field} />
+                    <Textarea placeholder="Context about this Python codebase..." className="resize-none bg-black/20" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

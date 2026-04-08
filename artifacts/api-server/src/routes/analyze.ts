@@ -13,212 +13,248 @@ const STEP_NAMES: Record<number, string> = {
   1: "Repository Discovery",
   2: "Business Logic Classification",
   3: "Business Rule Extraction",
-  4: "Memory Store Dependency Map",
+  4: "Memory & State Dependency Map",
   5: "Microservice Grouping Proposal",
-  6: "English Requirements Document",
+  6: "Requirements Document",
 };
 
-const STEP_PROMPTS: Record<number, (repos: Array<{ name: string; javaCode: string; packageStructure: string | null }>, previousResults: string) => string> = {
-  1: (repos) => `You are an expert Java software architect analyzing a legacy Java 8 monolith for modernization.
+type RepoRecord = { name: string; javaCode: string; packageStructure: string | null };
+
+const STEP_PROMPTS: Record<number, (repos: RepoRecord[], previousResults: string) => string> = {
+  1: (repos) => `You are an expert Python software architect analyzing a Python project for modernization.
 
 ## STEP 1 — Repository Discovery
 
-Analyze the following Java repositories and produce an inventory for each one:
+Analyze the following Python repositories and produce a structured inventory for each one:
 
 ${repos.map(r => `### Repository: ${r.name}
-${r.packageStructure ? `Package Structure Hint: ${r.packageStructure}` : ""}
+${r.packageStructure ? `File Structure:\n${r.packageStructure}` : ""}
 
-\`\`\`java
+\`\`\`python
 ${r.javaCode}
 \`\`\``).join("\n\n")}
 
-For each repository, produce a Markdown table with:
-- Repo name
-- Package structure (top-level packages found)
-- Estimated number of service/manager/handler classes
-- Presence of: @Service, @Component, @Stateful, @Singleton, or equivalent annotations
-- Any class that references in-memory stores (HashMap, ConcurrentHashMap, Ehcache, Hazelcast, or custom cache objects)
+For each repository, produce:
+1. A Markdown table listing every Python module (file), its purpose, and how many functions/classes it contains.
+2. A summary of the top-level package layout.
+3. A list of all classes and standalone functions found.
+4. Any notable third-party libraries imported.
 
-Output a clear, structured Markdown report. Be thorough and specific.
+Use this format exactly:
 
-Use this format:
 ## Repository Inventory
 
 ### [Repo Name]
-| Property | Value |
-|---|---|
-| Package Structure | ... |
-| Service/Manager Classes | ... |
-| Annotations Found | ... |
-| In-Memory Store References | ... |`,
 
-  2: (repos, previousResults) => `You are an expert Java software architect analyzing a legacy Java 8 monolith for modernization.
+#### Module Inventory
+| Module | Purpose (brief) | Classes | Functions |
+|--------|-----------------|---------|-----------|
+| ...    | ...             | ...     | ...       |
+
+#### Key Imports
+- [library] — [why it is used]
+
+#### Summary
+[2–4 sentences about what this codebase does overall]`,
+
+  2: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
 
 ## STEP 2 — Business Logic Classification
 
-Previous analysis context:
+Previous analysis:
 ${previousResults}
 
-Now analyze these Java repositories and classify each method:
+Analyze these Python repositories and classify every function and class method:
 
 ${repos.map(r => `### Repository: ${r.name}
-\`\`\`java
+\`\`\`python
 ${r.javaCode}
 \`\`\``).join("\n\n")}
 
-For every class you analyze, classify each method into one of these categories:
-- ✅ Business Rule — Validates, transforms, calculates, or enforces a domain rule (INCLUDE)
-- ✅ Orchestration Logic — Coordinates steps of a business process (INCLUDE)
-- ❌ Data Fetch — Reads from DB, cache, or memory store (EXCLUDE)
-- ❌ Data Write — Writes/updates DB, cache, or memory (EXCLUDE)
-- ❌ Infrastructure — Logging, config, connection pooling, retry logic (EXCLUDE)
-- ❌ UI Binding — Serialization, DTOs, view mappers (EXCLUDE)
+For every function or class method, assign exactly one of these categories:
 
-**Rule:** If a method touches a data store (Oracle queries, JDBC calls, cache.get/put), exclude it. If it contains if/else, switch, calculation, or validation against domain objects — include it.
+- ✅ **Business Rule** — Performs calculations, validations, threshold checks, or enforces a domain rule
+- ✅ **Orchestration** — Coordinates multiple business rules or process steps
+- ❌ **Data Access** — Reads/writes DB, files, external APIs, caches (EXCLUDE)
+- ❌ **Infrastructure** — Logging, config loading, retry logic, connection management (EXCLUDE)
+- ❌ **UI/Frontend** — Templates, view rendering, serialization/deserialization (EXCLUDE)
 
-Produce a Markdown table for each class showing method name, category, and include/exclude decision.`,
+**Classification rules:**
+- If a function contains if/else, calculation, validation, or domain-specific decisions → Business Rule
+- If it calls 2+ other business rules in sequence → Orchestration
+- If it primarily calls DB queries, HTTP requests, or cache operations → Data Access (exclude)
+- If you cannot determine the purpose → mark with ⚠️ NEEDS HUMAN REVIEW
 
-  3: (repos, previousResults) => `You are an expert Java software architect analyzing a legacy Java 8 monolith for modernization.
+For each module, produce:
+
+### Module: [filename.py]
+
+| Function/Method | Category | Include | Notes |
+|-----------------|----------|---------|-------|
+| ...             | ...      | Yes/No  | ...   |`,
+
+  3: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
 
 ## STEP 3 — Business Rule Extraction
 
-Previous analysis context:
+Previous analysis:
 ${previousResults}
 
 Extract all business rules from these repositories:
 
 ${repos.map(r => `### Repository: ${r.name}
-\`\`\`java
+\`\`\`python
 ${r.javaCode}
 \`\`\``).join("\n\n")}
 
-For each class that contains business logic, produce a structured output:
+For every function classified as a Business Rule or Orchestration in Step 2, produce:
 
-## Class: [ClassName] — [RepoName]
+### [ModuleName] — [ClassName or "module-level"]
 
-**Domain Area:** [e.g., Pricing / Order Management / User Eligibility]
-
-### Business Rules Found:
-
-#### Rule 1: [Short rule name]
-- **Method:** \`methodName(params)\`
-- **Plain English:** [What this rule does, in 1-3 sentences]
-- **Inputs:** [list of input parameters and their types]
-- **Output / Decision:** [what it returns or what decision it makes]
-- **Edge Cases / Conditions:** [any notable if/else branches]
-- **Microservice Candidate:** [Yes/No — and suggested microservice name]
+#### Rule: [Short descriptive name]
+- **Function/Method:** \`function_name(params)\`
+- **Plain English:** [1–3 sentences explaining what this rule does, with no code]
+- **Inputs:** [parameter name: type — what it represents]
+- **Output / Decision:** [what it returns or what branch it chooses]
+- **Edge Cases / Conditions:** [notable if/else branches, guards, exception handling]
+- **Suggested Module/Service:** [which microservice or functional module this belongs to]
 
 Rules:
-1. Never include SQL queries or JDBC code in your output
-2. Never include cache.get() / cache.put() operations
-3. If a method is 80% data fetching and 20% logic, extract only the logic portion and note it
-4. If you cannot determine what a method does, flag it with: ⚠️ NEEDS HUMAN REVIEW
-5. Treat all static final constants as potential business rules or thresholds — document them
-6. When you see large if/else if chains, these are almost always business rules — extract them all`,
+1. Never include DB queries, HTTP calls, or logging in your output
+2. If a function mixes data access with logic, extract ONLY the logic portion and note it
+3. Flag all constants and thresholds as potential business rules
+4. If you cannot determine what a function does: ⚠️ NEEDS HUMAN REVIEW
+5. Extract all branches of large if/elif/else chains — they are almost always business rules`,
 
-  4: (repos, previousResults) => `You are an expert Java software architect analyzing a legacy Java 8 monolith for modernization.
+  4: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
 
-## STEP 4 — Memory Store Dependency Map
+## STEP 4 — Memory & State Dependency Map
 
-Previous analysis context:
+Previous analysis:
 ${previousResults}
 
-Identify all classes that read from or write to in-memory stores in these repositories:
+Identify all in-memory data structures, global state, and stateful dependencies in these repositories:
 
 ${repos.map(r => `### Repository: ${r.name}
-\`\`\`java
+\`\`\`python
 ${r.javaCode}
 \`\`\``).join("\n\n")}
 
-For each class that uses in-memory stores (HashMap, ConcurrentHashMap, Ehcache, Hazelcast, custom caches), produce:
+For each module that holds or mutates in-memory state (dicts, lists, class attributes, global variables, caches), produce:
 
-## Memory Dependency: [ClassName]
+### Memory Dependency: [module_name.py — ClassName or global scope]
 
-- **Type of access:** READ / WRITE / BOTH
-- **Data structure used:** [HashMap / ConcurrentHashMap / custom cache / etc.]
-- **Keys used:** [what keys are used to look up data]
-- **Business context:** [why this data is needed — what decision depends on it]
-- **Couchbase migration note:** [suggested document model or collection name in Couchbase]
+- **Type of state:** [dict / list / set / class attribute / global variable / LRU cache / etc.]
+- **Variable name:** \`variable_name\`
+- **Access pattern:** READ / WRITE / BOTH
+- **Keys or fields used:** [how the data is indexed or accessed]
+- **Business context:** [what decision or rule depends on this state]
+- **Migration note:** [suggested replacement — e.g., Redis cache, database table, or passed as function argument]
 
-If no in-memory stores are found, note that and describe any persistence patterns observed.`,
+If no in-memory state is found in a module, note it explicitly.
 
-  5: (repos, previousResults) => `You are an expert Java software architect analyzing a legacy Java 8 monolith for modernization.
+Also map any cross-module shared state (global variables imported by multiple modules).`,
+
+  5: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
 
 ## STEP 5 — Microservice Grouping Proposal
 
-Previous analysis context:
+Previous analysis:
 ${previousResults}
 
-Based on the business rules extracted from these repositories, propose a microservice architecture:
+Based on the business rules extracted, group them into logical microservice or module boundaries:
 
 ${repos.map(r => `### Repository: ${r.name}
-\`\`\`java
+\`\`\`python
 ${r.javaCode}
 \`\`\``).join("\n\n")}
 
-Group the extracted business rules into logical microservice boundaries:
+Apply domain-driven design: group by bounded context, not by technical layer.
 
-## Proposed Microservice: [ServiceName]
+For each proposed microservice or module, produce:
 
-- **Responsibility:** [One sentence]
-- **Business rules it owns:** [list rule names from Step 3]
-- **Data it needs from Couchbase:** [collections / document types]
-- **APIs it exposes:** [suggested REST or event-driven endpoints]
-- **Dependencies on other microservices:** [list]
+## Proposed Service: [ServiceName]
 
-Consider domain-driven design principles. Group services by bounded context.`,
+- **Responsibility:** [One clear sentence describing what this service does]
+- **Business rules it owns:** [list of rule names from Step 3]
+- **Data it needs:** [data models, state dependencies from Step 4]
+- **APIs it would expose:** [suggested REST endpoints or event-driven interfaces]
+- **Dependencies on other services:** [list any cross-service calls needed]
+- **Out of scope:** [what this service explicitly does NOT handle]
 
-  6: (repos, previousResults) => `You are an expert Java software architect analyzing a legacy Java 8 monolith for modernization.
+End with a **dependency graph** in text form showing how the proposed services relate to each other.`,
 
-## STEP 6 — English Requirements Document
+  6: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
 
-Previous analysis context:
+## STEP 6 — Requirements Document
+
+Previous analysis:
 ${previousResults}
 
-Generate English Requirements files for each proposed microservice. Use the full context of the analysis.
+Generate a complete, consolidated requirements document. Use plain English — no code, no implementation details.
 
 ${repos.map(r => `### Repository: ${r.name}
-\`\`\`java
+\`\`\`python
 ${r.javaCode}
 \`\`\``).join("\n\n")}
 
-For each proposed microservice, generate:
+Produce the following sections:
+
+---
+
+# Python Codebase Requirements Report
+
+## Executive Summary
+[3–5 sentences summarizing what the codebase does, written for a non-technical stakeholder]
+
+## System Overview
+[Describe the system's purpose, users, and core domain]
+
+---
+
+For each proposed microservice from Step 5, generate:
 
 # Requirements: [ServiceName]
 
 ## Purpose
-[1 paragraph describing what this service does and why it exists]
+[1 paragraph — what this service does and why it exists]
 
-## Business Rules
-1. [Rule written in plain English, no code]
+## Functional Requirements
+1. [Plain-English requirement — no code]
 2. ...
 
-## Data Contract
-- Reads from Couchbase collection: \`[collection_name]\`
-- Document structure expected: \`{ field: type, ... }\`
+## Business Rules
+1. [Rule name] — [plain-English description, inputs, and outcome]
+2. ...
+
+## Data Requirements
+- [What data this service reads and writes, in plain English]
 
 ## API Contract
-- \`POST /endpoint\` — [what it does]
-- \`GET /endpoint/{id}\` — [what it returns]
+- \`[METHOD] /[endpoint]\` — [what it does and returns]
 
 ## Out of Scope
 - [What this service explicitly does NOT do]
 
 ---
 
-Also produce these consolidated files:
+## Flagged Items ⚠️
+List all items marked ⚠️ NEEDS HUMAN REVIEW with context explaining why human judgment is required.
 
-### microservices-proposal.md
-A consolidated overview of all proposed microservices.
+---
 
-### Migration Strategy
-Brief notes on migration order and dependencies between services.`,
+## Consolidated Microservices Overview
+A single table showing all proposed services, their responsibilities, and interdependencies.
+
+| Service | Responsibility | Depends On |
+|---------|---------------|------------|
+| ...     | ...           | ...        |`,
 };
 
 async function runStep(
   analysisId: number,
   step: number,
-  repos: Array<{ name: string; javaCode: string; packageStructure: string | null }>,
+  repos: RepoRecord[],
   previousResults: string,
   res: Response
 ): Promise<string> {
@@ -234,13 +270,13 @@ async function runStep(
   res.write(`data: ${JSON.stringify({ step, stepName, status: "starting" })}\n\n`);
 
   const stream = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "gpt-4o",
     max_completion_tokens: 8192,
     messages: [
       {
         role: "system",
         content:
-          "You are an expert Java software architect specializing in legacy modernization. Produce detailed, structured Markdown output following the given format exactly. Be thorough, specific, and actionable.",
+          "You are an expert Python software architect specializing in analyzing codebases and producing structured business and functional requirements. Produce detailed, well-structured Markdown output following the given format exactly. Be thorough, specific, and actionable. Flag anything unclear with ⚠️ NEEDS HUMAN REVIEW.",
       },
       { role: "user", content: prompt },
     ],

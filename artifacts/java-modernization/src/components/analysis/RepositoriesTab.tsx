@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const pasteSchema = z.object({
   name: z.string().min(1, "Repository name is required"),
-  javaCode: z.string().min(10, "Source code is required to analyze"),
+  javaCode: z.string().min(10, "Source code is required"),
   packageStructure: z.string().optional(),
 });
 
@@ -128,8 +128,8 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-semibold text-white">Source Repositories</h3>
-          <p className="text-sm text-muted-foreground mt-1">Import from GitHub or paste Java code directly.</p>
+          <h3 className="text-xl font-semibold text-white">Python Repositories</h3>
+          <p className="text-sm text-muted-foreground mt-1">Import from GitHub or paste Python code directly.</p>
         </div>
         {!isAdding && (
           <Button onClick={() => setIsAdding(true)} className="gap-2 glow-primary" data-testid="button-add-repository">
@@ -147,7 +147,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
             transition={{ duration: 0.2 }}
           >
             <Card className="glass-panel border-primary/30 overflow-hidden">
-              {/* Mode tabs */}
               <div className="flex border-b border-white/10">
                 <button
                   onClick={() => setAddMode("github")}
@@ -156,7 +155,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                       ? "text-white border-b-2 border-primary bg-primary/5"
                       : "text-muted-foreground hover:text-white"
                   }`}
-                  data-testid="tab-github-import"
                 >
                   <Github className="w-4 h-4" />
                   Import from GitHub
@@ -168,7 +166,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                       ? "text-white border-b-2 border-primary bg-primary/5"
                       : "text-muted-foreground hover:text-white"
                   }`}
-                  data-testid="tab-paste-code"
                 >
                   <Code className="w-4 h-4" />
                   Paste Code
@@ -176,7 +173,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
               </div>
 
               <div className="p-6">
-                {/* GitHub Import Mode */}
                 {addMode === "github" && (
                   <div className="space-y-5">
                     {githubStatus !== "fetched" && (
@@ -190,9 +186,8 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                                 <FormLabel>GitHub Repository URL</FormLabel>
                                 <FormControl>
                                   <Input
-                                    placeholder="https://github.com/owner/repo"
+                                    placeholder="https://github.com/owner/python-repo"
                                     className="bg-black/30 border-white/10 font-mono"
-                                    data-testid="input-github-url"
                                     {...field}
                                   />
                                 </FormControl>
@@ -212,7 +207,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                                     <Input
                                       placeholder="main"
                                       className="bg-black/30 border-white/10"
-                                      data-testid="input-github-branch"
                                       {...field}
                                     />
                                   </FormControl>
@@ -232,7 +226,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                                       type="password"
                                       placeholder="ghp_xxxxxxxxxxxx"
                                       className="bg-black/30 border-white/10 font-mono"
-                                      data-testid="input-github-token"
                                       {...field}
                                     />
                                   </FormControl>
@@ -243,11 +236,11 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                           </div>
 
                           <div className="bg-black/20 rounded-lg p-3 border border-white/5 text-xs text-muted-foreground">
-                            <p>All <code className="text-primary">.java</code> files in the repository will be fetched (up to 100 files). For large monorepos, consider breaking them into separate repository entries.</p>
+                            All <code className="text-primary">.py</code> files will be fetched (up to 100 files). Ignores <code className="text-white/50">__pycache__</code>, <code className="text-white/50">venv</code>, <code className="text-white/50">migrations</code>, and build artifacts.
                           </div>
 
                           {githubStatus === "error" && githubError && (
-                            <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-4 py-3 text-sm" data-testid="error-github-fetch">
+                            <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-4 py-3 text-sm">
                               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                               <span>{githubError}</span>
                             </div>
@@ -259,7 +252,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                               type="submit"
                               disabled={githubStatus === "fetching"}
                               className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-                              data-testid="button-fetch-github"
                             >
                               {githubStatus === "fetching" ? (
                                 <><Loader2 className="w-4 h-4 animate-spin" /> Fetching files...</>
@@ -272,7 +264,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                       </Form>
                     )}
 
-                    {/* Fetched preview */}
                     {githubStatus === "fetched" && githubResult && (
                       <motion.div
                         initial={{ opacity: 0, y: 4 }}
@@ -282,9 +273,11 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                         <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
                           <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
                           <div>
-                            <p className="text-sm font-medium text-white">Successfully fetched <span className="text-primary font-mono">{githubResult.name}</span></p>
+                            <p className="text-sm font-medium text-white">
+                              Fetched <span className="text-primary font-mono">{githubResult.name}</span>
+                            </p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {githubResult.fileCount} Java file{githubResult.fileCount !== 1 ? "s" : ""} • {Math.round(githubResult.javaCode.length / 1024)} KB of code
+                              {githubResult.fileCount} Python file{githubResult.fileCount !== 1 ? "s" : ""} · {Math.round(githubResult.javaCode.length / 1024)} KB of source code
                               {githubResult.truncated && <span className="text-yellow-400 ml-2">⚠ Results truncated at 100 files</span>}
                             </p>
                           </div>
@@ -314,7 +307,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                               onClick={onGithubSave}
                               disabled={createMutation.isPending}
                               className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-                              data-testid="button-save-github-repo"
                             >
                               {createMutation.isPending ? (
                                 <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
@@ -329,7 +321,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                   </div>
                 )}
 
-                {/* Paste Mode */}
                 {addMode === "paste" && (
                   <Form {...pasteForm}>
                     <form onSubmit={pasteForm.handleSubmit(onPasteSubmit)} className="space-y-4">
@@ -338,12 +329,11 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                         name="name"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Repository Name / Module</FormLabel>
+                            <FormLabel>Repository / Module Name</FormLabel>
                             <FormControl>
                               <Input
-                                placeholder="e.g. core-services"
+                                placeholder="e.g. payment-service"
                                 className="bg-black/30 border-white/10"
-                                data-testid="input-repo-name"
                                 {...field}
                               />
                             </FormControl>
@@ -357,12 +347,11 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                         name="javaCode"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Raw Java Code</FormLabel>
+                            <FormLabel>Python Source Code</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="public class OrderService { ... }"
+                                placeholder="def calculate_total(items): ..."
                                 className="h-64 font-mono text-xs bg-black/50 border-white/10 resize-y"
-                                data-testid="textarea-java-code"
                                 {...field}
                               />
                             </FormControl>
@@ -376,12 +365,11 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                         name="packageStructure"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Package Structure <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                            <FormLabel>File / Package Structure <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder={"com.company.order\n├── service\n├── model\n└── config"}
+                                placeholder={"myapp/\n├── services/\n├── models/\n└── utils/"}
                                 className="h-28 font-mono text-xs bg-black/50 border-white/10"
-                                data-testid="textarea-package-structure"
                                 {...field}
                               />
                             </FormControl>
@@ -396,7 +384,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                           type="submit"
                           disabled={createMutation.isPending}
                           className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                          data-testid="button-save-paste-repo"
                         >
                           {createMutation.isPending ? "Saving..." : "Save Repository"}
                         </Button>
@@ -410,13 +397,11 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
         )}
       </AnimatePresence>
 
-      {/* Repo cards */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {repos?.map((repo) => (
           <Card
             key={repo.id}
             className="p-5 bg-black/20 border-white/5 hover:border-white/10 transition-colors flex flex-col group"
-            data-testid={`card-repository-${repo.id}`}
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
@@ -441,7 +426,6 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                       deleteMutation.mutate(repo.id);
                     }
                   }}
-                  data-testid={`button-delete-repo-${repo.id}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -462,13 +446,12 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
         {!isLoading && repos?.length === 0 && !isAdding && (
           <div className="col-span-full py-16 text-center border-2 border-dashed border-white/10 rounded-xl">
             <FileCode className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium text-white mb-1">No repositories added</h3>
-            <p className="text-muted-foreground text-sm">Import from GitHub or paste Java source code to begin.</p>
+            <h3 className="text-lg font-medium text-white mb-1">No repositories added yet</h3>
+            <p className="text-muted-foreground text-sm">Import from GitHub or paste Python source code to begin.</p>
             <Button
               onClick={() => setIsAdding(true)}
               variant="outline"
               className="mt-6 border-white/10 gap-2"
-              data-testid="button-add-first-repo"
             >
               <Plus className="w-4 h-4" /> Add Repository
             </Button>

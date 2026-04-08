@@ -19,7 +19,7 @@ export function Sidebar() {
           <Cpu className="w-5 h-5 text-white" />
         </div>
         <h1 className="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
-          LegacyAgent
+          PyAnalyzer
         </h1>
       </div>
 
