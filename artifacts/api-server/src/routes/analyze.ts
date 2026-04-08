@@ -20,23 +20,40 @@ const STEP_NAMES: Record<number, string> = {
 
 type RepoRecord = { name: string; javaCode: string; packageStructure: string | null };
 
+function detectLanguage(code: string): string {
+  const pyLines = (code.match(/^#.*(FILE:.*\.py)/gm) || []).length;
+  const tsLines = (code.match(/^\/\/.*(FILE:.*\.(ts|js))/gm) || []).length;
+  if (pyLines > tsLines) return "Python";
+  if (tsLines > pyLines) return "TypeScript/JavaScript";
+  return "backend";
+}
+
+function codeBlock(repo: RepoRecord): string {
+  const hasPy = repo.javaCode.includes("FILE: ") && repo.javaCode.includes(".py");
+  const hasTs = repo.javaCode.includes("FILE: ") && (repo.javaCode.includes(".ts") || repo.javaCode.includes(".js"));
+  const lang = hasPy ? "python" : hasTs ? "typescript" : "text";
+  return `### Repository: ${repo.name}
+${repo.packageStructure ? `File Structure:\n${repo.packageStructure}` : ""}
+
+\`\`\`${lang}
+${repo.javaCode}
+\`\`\``;
+}
+
 const STEP_PROMPTS: Record<number, (repos: RepoRecord[], previousResults: string) => string> = {
-  1: (repos) => `You are an expert Python software architect analyzing a Python project for modernization.
+  1: (repos) => {
+    const lang = detectLanguage(repos.map(r => r.javaCode).join("\n"));
+    return `You are an expert software architect analyzing a ${lang} project.
 
 ## STEP 1 — Repository Discovery
 
-Analyze the following Python repositories and produce a structured inventory for each one:
+Analyze the following repositories and produce a structured inventory for each one:
 
-${repos.map(r => `### Repository: ${r.name}
-${r.packageStructure ? `File Structure:\n${r.packageStructure}` : ""}
-
-\`\`\`python
-${r.javaCode}
-\`\`\``).join("\n\n")}
+${repos.map(codeBlock).join("\n\n")}
 
 For each repository, produce:
-1. A Markdown table listing every Python module (file), its purpose, and how many functions/classes it contains.
-2. A summary of the top-level package layout.
+1. A Markdown table listing every source module (file), its purpose, and how many functions/classes it contains.
+2. A summary of the top-level package/folder layout.
 3. A list of all classes and standalone functions found.
 4. Any notable third-party libraries imported.
 
@@ -51,25 +68,25 @@ Use this format exactly:
 |--------|-----------------|---------|-----------|
 | ...    | ...             | ...     | ...       |
 
-#### Key Imports
+#### Key Imports / Dependencies
 - [library] — [why it is used]
 
 #### Summary
-[2–4 sentences about what this codebase does overall]`,
+[2–4 sentences about what this codebase does overall]`;
+  },
 
-  2: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
+  2: (repos, previousResults) => {
+    const lang = detectLanguage(repos.map(r => r.javaCode).join("\n"));
+    return `You are an expert software architect analyzing a ${lang} project.
 
 ## STEP 2 — Business Logic Classification
 
 Previous analysis:
 ${previousResults}
 
-Analyze these Python repositories and classify every function and class method:
+Analyze these repositories and classify every function and class method:
 
-${repos.map(r => `### Repository: ${r.name}
-\`\`\`python
-${r.javaCode}
-\`\`\``).join("\n\n")}
+${repos.map(codeBlock).join("\n\n")}
 
 For every function or class method, assign exactly one of these categories:
 
@@ -87,13 +104,16 @@ For every function or class method, assign exactly one of these categories:
 
 For each module, produce:
 
-### Module: [filename.py]
+### Module: [filename]
 
 | Function/Method | Category | Include | Notes |
 |-----------------|----------|---------|-------|
-| ...             | ...      | Yes/No  | ...   |`,
+| ...             | ...      | Yes/No  | ...   |`;
+  },
 
-  3: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
+  3: (repos, previousResults) => {
+    const lang = detectLanguage(repos.map(r => r.javaCode).join("\n"));
+    return `You are an expert software architect analyzing a ${lang} project.
 
 ## STEP 3 — Business Rule Extraction
 
@@ -102,21 +122,18 @@ ${previousResults}
 
 Extract all business rules from these repositories:
 
-${repos.map(r => `### Repository: ${r.name}
-\`\`\`python
-${r.javaCode}
-\`\`\``).join("\n\n")}
+${repos.map(codeBlock).join("\n\n")}
 
 For every function classified as a Business Rule or Orchestration in Step 2, produce:
 
 ### [ModuleName] — [ClassName or "module-level"]
 
 #### Rule: [Short descriptive name]
-- **Function/Method:** \`function_name(params)\`
+- **Function/Method:** \`functionName(params)\`
 - **Plain English:** [1–3 sentences explaining what this rule does, with no code]
 - **Inputs:** [parameter name: type — what it represents]
 - **Output / Decision:** [what it returns or what branch it chooses]
-- **Edge Cases / Conditions:** [notable if/else branches, guards, exception handling]
+- **Edge Cases / Conditions:** [notable conditional branches, guards, exception handling]
 - **Suggested Module/Service:** [which microservice or functional module this belongs to]
 
 Rules:
@@ -124,38 +141,41 @@ Rules:
 2. If a function mixes data access with logic, extract ONLY the logic portion and note it
 3. Flag all constants and thresholds as potential business rules
 4. If you cannot determine what a function does: ⚠️ NEEDS HUMAN REVIEW
-5. Extract all branches of large if/elif/else chains — they are almost always business rules`,
+5. Extract all branches of large if/else chains — they are almost always business rules`;
+  },
 
-  4: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
+  4: (repos, previousResults) => {
+    const lang = detectLanguage(repos.map(r => r.javaCode).join("\n"));
+    return `You are an expert software architect analyzing a ${lang} project.
 
 ## STEP 4 — Memory & State Dependency Map
 
 Previous analysis:
 ${previousResults}
 
-Identify all in-memory data structures, global state, and stateful dependencies in these repositories:
+Identify all in-memory data structures, module-level state, and stateful dependencies in these repositories:
 
-${repos.map(r => `### Repository: ${r.name}
-\`\`\`python
-${r.javaCode}
-\`\`\``).join("\n\n")}
+${repos.map(codeBlock).join("\n\n")}
 
-For each module that holds or mutates in-memory state (dicts, lists, class attributes, global variables, caches), produce:
+For each module that holds or mutates in-memory state (Maps, objects, arrays, class properties, module-level variables, caches), produce:
 
-### Memory Dependency: [module_name.py — ClassName or global scope]
+### Memory Dependency: [module_name — ClassName or module scope]
 
-- **Type of state:** [dict / list / set / class attribute / global variable / LRU cache / etc.]
-- **Variable name:** \`variable_name\`
+- **Type of state:** [Map / object / array / class property / module-level variable / cache / etc.]
+- **Variable name:** \`variableName\`
 - **Access pattern:** READ / WRITE / BOTH
 - **Keys or fields used:** [how the data is indexed or accessed]
 - **Business context:** [what decision or rule depends on this state]
-- **Migration note:** [suggested replacement — e.g., Redis cache, database table, or passed as function argument]
+- **Migration note:** [suggested replacement — e.g., Redis, database table, or pass as argument]
 
 If no in-memory state is found in a module, note it explicitly.
 
-Also map any cross-module shared state (global variables imported by multiple modules).`,
+Also map any cross-module shared state (exported variables imported by multiple modules).`;
+  },
 
-  5: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
+  5: (repos, previousResults) => {
+    const lang = detectLanguage(repos.map(r => r.javaCode).join("\n"));
+    return `You are an expert software architect analyzing a ${lang} project.
 
 ## STEP 5 — Microservice Grouping Proposal
 
@@ -164,10 +184,7 @@ ${previousResults}
 
 Based on the business rules extracted, group them into logical microservice or module boundaries:
 
-${repos.map(r => `### Repository: ${r.name}
-\`\`\`python
-${r.javaCode}
-\`\`\``).join("\n\n")}
+${repos.map(codeBlock).join("\n\n")}
 
 Apply domain-driven design: group by bounded context, not by technical layer.
 
@@ -182,9 +199,12 @@ For each proposed microservice or module, produce:
 - **Dependencies on other services:** [list any cross-service calls needed]
 - **Out of scope:** [what this service explicitly does NOT handle]
 
-End with a **dependency graph** in text form showing how the proposed services relate to each other.`,
+End with a **dependency graph** in text form showing how the proposed services relate to each other.`;
+  },
 
-  6: (repos, previousResults) => `You are an expert Python software architect analyzing a Python project.
+  6: (repos, previousResults) => {
+    const lang = detectLanguage(repos.map(r => r.javaCode).join("\n"));
+    return `You are an expert software architect analyzing a ${lang} project.
 
 ## STEP 6 — Requirements Document
 
@@ -193,16 +213,13 @@ ${previousResults}
 
 Generate a complete, consolidated requirements document. Use plain English — no code, no implementation details.
 
-${repos.map(r => `### Repository: ${r.name}
-\`\`\`python
-${r.javaCode}
-\`\`\``).join("\n\n")}
+${repos.map(codeBlock).join("\n\n")}
 
 Produce the following sections:
 
 ---
 
-# Python Codebase Requirements Report
+# Codebase Requirements Report
 
 ## Executive Summary
 [3–5 sentences summarizing what the codebase does, written for a non-technical stakeholder]
@@ -248,7 +265,8 @@ A single table showing all proposed services, their responsibilities, and interd
 
 | Service | Responsibility | Depends On |
 |---------|---------------|------------|
-| ...     | ...           | ...        |`,
+| ...     | ...           | ...        |`;
+  },
 };
 
 async function runStep(

@@ -20,12 +20,24 @@ interface GithubFileContent {
   encoding: string;
 }
 
-const PYTHON_EXTENSIONS = [".py"];
-const IGNORE_PATHS = ["__pycache__", ".egg-info", "migrations", "node_modules", ".git", "venv", ".venv", "dist", "build"];
+const BACKEND_EXTENSIONS = [".py", ".ts", ".js"];
+const UI_PATTERNS = [".tsx", ".jsx", ".vue", ".svelte", ".css", ".scss", ".less", ".html"];
+const IGNORE_PATHS = [
+  "__pycache__", ".egg-info", "node_modules", ".git", "venv", ".venv",
+  "dist", "build", "migrations", ".tox", ".pytest_cache", "coverage",
+  ".generated", "generated", ".min.", ".d.ts",
+];
+const IGNORE_FILE_PATTERNS = [
+  ".test.", ".spec.", ".stories.", "jest.config", "vite.config",
+  "tailwind.config", "postcss.config", "eslint", ".prettierrc",
+  "drizzle.config", "orval.config", "tsconfig", "package.json", "pnpm-lock",
+];
 
-function isPythonFile(path: string): boolean {
+function isBackendFile(path: string): boolean {
   if (IGNORE_PATHS.some((ignore) => path.includes(ignore))) return false;
-  return PYTHON_EXTENSIONS.some((ext) => path.endsWith(ext));
+  if (UI_PATTERNS.some((ext) => path.endsWith(ext))) return false;
+  if (IGNORE_FILE_PATTERNS.some((pat) => path.includes(pat))) return false;
+  return BACKEND_EXTENSIONS.some((ext) => path.endsWith(ext));
 }
 
 function parseGithubUrl(url: string): { owner: string; repo: string } | null {
@@ -99,23 +111,25 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
   }
 
   const treeData = await treeResp.json() as GithubTreeResponse;
-  const pythonFiles = treeData.tree
-    .filter((item) => item.type === "blob" && isPythonFile(item.path))
+  const backendFiles = treeData.tree
+    .filter((item) => item.type === "blob" && isBackendFile(item.path))
     .slice(0, limit);
 
-  if (pythonFiles.length === 0) {
-    res.status(422).json({ error: `No Python (.py) files found in ${owner}/${repo} on branch '${targetBranch}'.` });
+  if (backendFiles.length === 0) {
+    res.status(422).json({
+      error: `No backend source files (.py, .ts, .js) found in ${owner}/${repo} on branch '${targetBranch}'. The repository may be empty, use unsupported languages, or only contain frontend/UI code.`,
+    });
     return;
   }
 
-  const filePaths = pythonFiles.map((f) => f.path);
+  const filePaths = backendFiles.map((f) => f.path);
   const packageStructure = buildFileTree(filePaths);
 
   const codeParts: string[] = [];
   const batchSize = 10;
 
-  for (let i = 0; i < pythonFiles.length; i += batchSize) {
-    const batch = pythonFiles.slice(i, i + batchSize);
+  for (let i = 0; i < backendFiles.length; i += batchSize) {
+    const batch = backendFiles.slice(i, i + batchSize);
     const results = await Promise.allSettled(
       batch.map(async (file) => {
         const fileResp = await githubFetch(
@@ -126,7 +140,8 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
         const fileData = await fileResp.json() as GithubFileContent;
         if (fileData.encoding === "base64") {
           const decoded = Buffer.from(fileData.content.replace(/\n/g, ""), "base64").toString("utf-8");
-          return `# ===== FILE: ${file.path} =====\n${decoded}\n`;
+          const commentPrefix = file.path.endsWith(".py") ? "#" : "//";
+          return `${commentPrefix} ===== FILE: ${file.path} =====\n${decoded}\n`;
         }
         return null;
       })
@@ -140,7 +155,7 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
   }
 
   const javaCode = codeParts.join("\n");
-  const isTruncated = treeData.truncated || pythonFiles.length === limit;
+  const isTruncated = treeData.truncated || backendFiles.length === limit;
 
   res.json({
     name: `${owner}/${repo}`,

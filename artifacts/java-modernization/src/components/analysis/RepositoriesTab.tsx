@@ -128,8 +128,8 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-semibold text-white">Python Repositories</h3>
-          <p className="text-sm text-muted-foreground mt-1">Import from GitHub or paste Python code directly.</p>
+          <h3 className="text-xl font-semibold text-white">Repositories</h3>
+          <p className="text-sm text-muted-foreground mt-1">Import from GitHub or paste backend source code directly. Supports Python, TypeScript, and JavaScript.</p>
         </div>
         {!isAdding && (
           <Button onClick={() => setIsAdding(true)} className="gap-2 glow-primary" data-testid="button-add-repository">
@@ -236,7 +236,7 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                           </div>
 
                           <div className="bg-black/20 rounded-lg p-3 border border-white/5 text-xs text-muted-foreground">
-                            All <code className="text-primary">.py</code> files will be fetched (up to 100 files). Ignores <code className="text-white/50">__pycache__</code>, <code className="text-white/50">venv</code>, <code className="text-white/50">migrations</code>, and build artifacts.
+                            Backend files (<code className="text-primary">.py</code>, <code className="text-primary">.ts</code>, <code className="text-primary">.js</code>) will be fetched — up to 100 files. UI components, tests, config files, and build artifacts are automatically excluded.
                           </div>
 
                           {githubStatus === "error" && githubError && (
@@ -347,10 +347,10 @@ export function RepositoriesTab({ analysisId }: { analysisId: number }) {
                         name="javaCode"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Python Source Code</FormLabel>
+                            <FormLabel>Backend Source Code</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="def calculate_total(items): ..."
+                                placeholder="# Python, TypeScript, or JavaScript backend code..."
                                 className="h-64 font-mono text-xs bg-black/50 border-white/10 resize-y"
                                 {...field}
                               />
