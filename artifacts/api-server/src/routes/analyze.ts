@@ -1,11 +1,16 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, analysesTable, repositoriesTable, analysisResultsTable } from "@workspace/db";
-import { openai } from "@workspace/integrations-openai-ai-server";
 import {
   RunAnalysisStepParams,
   RunFullAnalysisParams,
 } from "@workspace/api-zod";
+import OpenAI from "openai";
+
+const openrouter = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY ?? "",
+});
 
 const router: IRouter = Router();
 
@@ -287,14 +292,14 @@ async function runStep(
 
   res.write(`data: ${JSON.stringify({ step, stepName, status: "starting" })}\n\n`);
 
-  const stream = await openai.chat.completions.create({
-    model: "gpt-5.2",
-    max_completion_tokens: 8192,
+  const stream = await openrouter.chat.completions.create({
+    model: "nvidia/nemotron-3-super-120b-a12b:free",
+    max_tokens: 8192,
     messages: [
       {
         role: "system",
         content:
-          "You are an expert Python software architect specializing in analyzing codebases and producing structured business and functional requirements. Produce detailed, well-structured Markdown output following the given format exactly. Be thorough, specific, and actionable. Flag anything unclear with ⚠️ NEEDS HUMAN REVIEW.",
+          "You are an expert software architect specializing in analyzing codebases and producing structured business and functional requirements. Produce detailed, well-structured Markdown output following the given format exactly. Be thorough, specific, and actionable. Flag anything unclear with ⚠️ NEEDS HUMAN REVIEW.",
       },
       { role: "user", content: prompt },
     ],

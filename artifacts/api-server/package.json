@@ -11,7 +11,7 @@
   "dependencies": {
     "@workspace/db": "workspace:*",
     "@workspace/api-zod": "workspace:*",
-    "@workspace/integrations-openai-ai-server": "workspace:*",
+    "openai": "^4.103.0",
     "drizzle-orm": "catalog:",
     "express": "^5",
     "cookie-parser": "^1.4.7",
