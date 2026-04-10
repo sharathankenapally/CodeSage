@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
   FileCode, Trash2, Plus, Code, Github,
-  AlertCircle, CheckCircle2, Loader2, FolderGit2, ArrowRight, X
+  AlertCircle, CheckCircle2, Loader2, FolderGit2, ArrowRight, X, Lock, GitBranch, ChevronDown, ChevronUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,7 @@ interface GithubEntry {
   url: string;
   branch: string;
   token: string;
+  showToken: boolean;
   status: "idle" | "fetching" | "fetched" | "error" | "saved";
   result?: GithubFetchResult;
   error?: string;
@@ -54,7 +55,7 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
 
   const [addMode, setAddMode] = useState<"none" | "github" | "paste">("none");
   const [entries, setEntries] = useState<GithubEntry[]>([
-    { url: "", branch: "", token: "", status: "idle" },
+    { url: "", branch: "", token: "", showToken: false, status: "idle" },
   ]);
   const [justSavedCount, setJustSavedCount] = useState(0);
 
@@ -69,7 +70,7 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
   };
 
   const addUrlRow = () => {
-    setEntries(prev => [...prev, { url: "", branch: "", token: "", status: "idle" }]);
+    setEntries(prev => [...prev, { url: "", branch: "", token: "", showToken: false, status: "idle" }]);
   };
 
   const removeUrlRow = (idx: number) => {
@@ -153,7 +154,7 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
   };
 
   const resetGithubForm = () => {
-    setEntries([{ url: "", branch: "", token: "", status: "idle" }]);
+    setEntries([{ url: "", branch: "", token: "", showToken: false, status: "idle" }]);
     setAddMode("none");
     setJustSavedCount(0);
   };
@@ -249,82 +250,165 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
                 </Button>
               </div>
 
-              <div className="p-6 space-y-3">
+              {/* Format guide */}
+              <div className="mx-6 mt-5 mb-1 flex items-start gap-3 bg-white/[0.03] border border-white/8 rounded-lg px-4 py-3">
+                <Github className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="text-xs text-muted-foreground leading-relaxed">
+                  <span className="text-white/70 font-medium">Accepted URL formats:</span>
+                  <div className="mt-1.5 space-y-0.5 font-mono">
+                    <div><span className="text-primary/80">https://github.com/</span><span className="text-white/60">owner/repo</span></div>
+                    <div><span className="text-primary/80">https://github.com/</span><span className="text-white/60">owner/repo/tree/main</span></div>
+                    <div><span className="text-primary/80">https://github.com/</span><span className="text-white/60">owner/repo/tree/dev</span></div>
+                  </div>
+                  <p className="mt-2 text-white/40">
+                    For <span className="text-yellow-400/80">private repos</span>, expand "Private repo" below each URL to add your GitHub token
+                    (<code className="text-white/50">ghp_…</code> or fine-grained PAT with <code className="text-white/50">Contents: Read</code> scope).
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
                 {entries.map((entry, idx) => (
-                  <div key={idx} className="space-y-2">
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex gap-2">
-                        <Input
-                          placeholder="https://github.com/owner/repo"
-                          value={entry.url}
-                          onChange={e => updateEntry(idx, { url: e.target.value, status: "idle", error: undefined })}
-                          className="bg-black/30 border-white/10 font-mono flex-1"
-                          disabled={entry.status === "fetching" || entry.status === "saved"}
-                        />
-                        <Input
-                          placeholder="branch (optional)"
-                          value={entry.branch}
-                          onChange={e => updateEntry(idx, { branch: e.target.value })}
-                          className="bg-black/30 border-white/10 w-36"
-                          disabled={entry.status === "fetching" || entry.status === "saved"}
-                        />
-                        <Input
-                          type="password"
-                          placeholder="token (private)"
-                          value={entry.token}
-                          onChange={e => updateEntry(idx, { token: e.target.value })}
-                          className="bg-black/30 border-white/10 font-mono w-40"
-                          disabled={entry.status === "fetching" || entry.status === "saved"}
-                        />
+                  <div key={idx} className="rounded-xl border border-white/8 bg-black/20 overflow-hidden">
+                    {/* Main row */}
+                    <div className="flex gap-2 p-3">
+                      <div className="flex-1 flex gap-2 min-w-0">
+                        {/* URL */}
+                        <div className="flex-1 min-w-0">
+                          <div className="relative">
+                            <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            <Input
+                              placeholder="https://github.com/owner/repo"
+                              value={entry.url}
+                              onChange={e => updateEntry(idx, { url: e.target.value, status: "idle", error: undefined })}
+                              className="bg-black/30 border-white/10 font-mono text-sm pl-9 w-full"
+                              disabled={entry.status === "fetching" || entry.status === "saved"}
+                            />
+                          </div>
+                        </div>
+                        {/* Branch */}
+                        <div className="w-36 shrink-0">
+                          <div className="relative">
+                            <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              placeholder="branch"
+                              value={entry.branch}
+                              onChange={e => updateEntry(idx, { branch: e.target.value })}
+                              className="bg-black/30 border-white/10 text-sm pl-8 w-full"
+                              disabled={entry.status === "fetching" || entry.status === "saved"}
+                            />
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Per-row status */}
-                      <div className="flex items-center gap-1 shrink-0">
+                      {/* Status + actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {entry.status === "idle" && (
-                          <Button size="sm" variant="ghost" className="h-9 px-3 bg-white/5" onClick={() => fetchOne(idx)}>
+                          <Button size="sm" variant="ghost" className="h-9 px-3 bg-white/5 hover:bg-white/10" onClick={() => fetchOne(idx)}>
                             Fetch
                           </Button>
                         )}
                         {entry.status === "fetching" && (
-                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                          <div className="flex items-center gap-2 text-xs text-primary px-2">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Fetching…
+                          </div>
+                        )}
+                        {(entry.status === "fetched" || entry.status === "error") && entry.status !== "saved" && (
+                          <Button size="sm" variant="ghost" className="h-9 px-3 bg-white/5 text-xs" onClick={() => fetchOne(idx)}>
+                            Retry
+                          </Button>
                         )}
                         {entry.status === "fetched" && entry.result && (
-                          <span className="text-xs text-emerald-400 flex items-center gap-1">
+                          <span className="text-xs text-emerald-400 flex items-center gap-1 px-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> {entry.result.fileCount} files
                           </span>
                         )}
                         {entry.status === "saved" && (
-                          <span className="text-xs text-emerald-400 flex items-center gap-1">
+                          <span className="text-xs text-emerald-400 flex items-center gap-1 px-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Saved
                           </span>
                         )}
-                        {entry.status === "error" && (
-                          <AlertCircle className="w-4 h-4 text-destructive" title={entry.error} />
-                        )}
                         {entries.length > 1 && entry.status !== "saved" && (
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => removeUrlRow(idx)}>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeUrlRow(idx)}>
                             <X className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </div>
                     </div>
 
-                    {/* Inline error */}
+                    {/* Error */}
                     {entry.status === "error" && entry.error && (
-                      <p className="text-xs text-destructive pl-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> {entry.error}
-                      </p>
+                      <div className="px-3 pb-2">
+                        <p className="text-xs text-destructive flex items-center gap-1.5 bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {entry.error}
+                        </p>
+                      </div>
                     )}
 
-                    {/* Fetched preview */}
+                    {/* Private token toggle */}
+                    {entry.status !== "saved" && (
+                      <div className="border-t border-white/5">
+                        <button
+                          type="button"
+                          onClick={() => updateEntry(idx, { showToken: !entry.showToken })}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-white/70 transition-colors"
+                        >
+                          <Lock className="w-3 h-3" />
+                          Private repo? Add GitHub token
+                          {entry.showToken
+                            ? <ChevronUp className="w-3 h-3 ml-auto" />
+                            : <ChevronDown className="w-3 h-3 ml-auto" />
+                          }
+                          {entry.token && !entry.showToken && (
+                            <span className="ml-auto mr-1 text-[10px] text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> token set
+                            </span>
+                          )}
+                        </button>
+                        <AnimatePresence>
+                          {entry.showToken && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="px-3 pb-3 space-y-1.5">
+                                <div className="relative">
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                  <Input
+                                    type="password"
+                                    placeholder="ghp_xxxxxxxxxxxx  or  fine-grained PAT"
+                                    value={entry.token}
+                                    onChange={e => updateEntry(idx, { token: e.target.value })}
+                                    className="bg-black/40 border-white/10 font-mono text-sm pl-9"
+                                    disabled={entry.status === "fetching"}
+                                    autoComplete="off"
+                                  />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground pl-1">
+                                  Needs <code className="text-white/50 bg-white/5 px-1 rounded">Contents: Read</code> scope.
+                                  Token is used only for this fetch and never stored.
+                                </p>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* Fetched file tree preview */}
                     {entry.status === "fetched" && entry.result && (
-                      <div className="bg-black/30 border border-white/5 rounded-lg p-3 text-xs">
-                        <p className="text-white/70 font-mono mb-1.5">{entry.result.name}</p>
-                        <pre className="text-white/40 font-mono max-h-28 overflow-y-auto leading-relaxed">
+                      <div className="border-t border-white/5 bg-black/30 px-4 py-3">
+                        <p className="text-xs text-white/60 font-mono font-medium mb-2">{entry.result.name}</p>
+                        <pre className="text-[11px] text-white/40 font-mono max-h-28 overflow-y-auto leading-relaxed">
                           {entry.result.packageStructure}
                         </pre>
                         {entry.result.truncated && (
-                          <p className="text-yellow-400 mt-1.5">⚠ Capped at 100 files</p>
+                          <p className="text-yellow-400 text-[11px] mt-2 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> Capped at 100 files — largest files prioritised
+                          </p>
                         )}
                       </div>
                     )}
@@ -334,7 +418,7 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
                 {/* Add row + info */}
                 <div className="flex items-center justify-between pt-1">
                   <Button variant="ghost" size="sm" onClick={addUrlRow} className="gap-1.5 text-muted-foreground hover:text-white">
-                    <Plus className="w-3.5 h-3.5" /> Add another URL
+                    <Plus className="w-3.5 h-3.5" /> Add another repository
                   </Button>
                   <p className="text-[11px] text-muted-foreground">
                     Fetches <code className="text-primary">.py .ts .js</code> backend files · max 100 per repo
