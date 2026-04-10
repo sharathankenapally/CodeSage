@@ -288,7 +288,7 @@ async function runStep(
   res.write(`data: ${JSON.stringify({ step, stepName, status: "starting" })}\n\n`);
 
   const stream = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.2",
     max_completion_tokens: 8192,
     messages: [
       {
