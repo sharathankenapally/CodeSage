@@ -29,7 +29,7 @@ export default function Home() {
             <div>
               <h1 className="text-3xl font-bold text-white tracking-tight">PyAnalyzer</h1>
               <p className="text-muted-foreground mt-1">
-                AI-powered business rules &amp; requirements extractor for Python, TypeScript, and JavaScript
+                AI-powered business rules &amp; requirements extractor for any backend codebase
               </p>
             </div>
             <Button onClick={() => setCreateOpen(true)} className="gap-2">
@@ -101,7 +101,7 @@ export default function Home() {
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-white">Welcome to PyAnalyzer</h2>
                 <p className="text-muted-foreground text-lg leading-relaxed">
-                  Analyze Python, TypeScript, and JavaScript repositories with AI to extract business rules and generate structured requirements.
+                  Analyze any backend repository — Python, Go, Java, Rust, TypeScript, Ruby, and more — with AI to extract business rules and generate structured requirements.
                 </p>
                 <div className="pt-2">
                   <Button size="lg" onClick={() => setCreateOpen(true)} className="gap-2">

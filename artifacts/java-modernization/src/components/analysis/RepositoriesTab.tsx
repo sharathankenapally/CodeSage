@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
   FileCode, Trash2, Plus, Code, Github,
-  AlertCircle, CheckCircle2, Loader2, FolderGit2, ArrowRight, X, Lock, GitBranch, ChevronDown, ChevronUp
+  AlertCircle, CheckCircle2, Loader2, FolderGit2, ArrowRight, X, Lock, ChevronDown, ChevronUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
@@ -181,7 +181,7 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
         <div>
           <h3 className="text-xl font-semibold text-white">Repositories</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Import one or more backend repos (Python · TypeScript · JavaScript) to analyze together.
+            Import one or more backend repos (Python · Go · Java · Rust · TypeScript · Ruby · and more) to analyze together.
           </p>
         </div>
         {addMode === "none" && (
@@ -250,54 +250,21 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
                 </Button>
               </div>
 
-              {/* Format guide */}
-              <div className="mx-6 mt-5 mb-1 flex items-start gap-3 bg-white/[0.03] border border-white/8 rounded-lg px-4 py-3">
-                <Github className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                <div className="text-xs text-muted-foreground leading-relaxed">
-                  <span className="text-white/70 font-medium">Accepted URL formats:</span>
-                  <div className="mt-1.5 space-y-0.5 font-mono">
-                    <div><span className="text-primary/80">https://github.com/</span><span className="text-white/60">owner/repo</span></div>
-                    <div><span className="text-primary/80">https://github.com/</span><span className="text-white/60">owner/repo/tree/main</span></div>
-                    <div><span className="text-primary/80">https://github.com/</span><span className="text-white/60">owner/repo/tree/dev</span></div>
-                  </div>
-                  <p className="mt-2 text-white/40">
-                    For <span className="text-yellow-400/80">private repos</span>, expand "Private repo" below each URL to add your GitHub token
-                    (<code className="text-white/50">ghp_…</code> or fine-grained PAT with <code className="text-white/50">Contents: Read</code> scope).
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-3">
                 {entries.map((entry, idx) => (
                   <div key={idx} className="rounded-xl border border-white/8 bg-black/20 overflow-hidden">
                     {/* Main row */}
                     <div className="flex gap-2 p-3">
-                      <div className="flex-1 flex gap-2 min-w-0">
-                        {/* URL */}
-                        <div className="flex-1 min-w-0">
-                          <div className="relative">
-                            <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                            <Input
-                              placeholder="https://github.com/owner/repo"
-                              value={entry.url}
-                              onChange={e => updateEntry(idx, { url: e.target.value, status: "idle", error: undefined })}
-                              className="bg-black/30 border-white/10 font-mono text-sm pl-9 w-full"
-                              disabled={entry.status === "fetching" || entry.status === "saved"}
-                            />
-                          </div>
-                        </div>
-                        {/* Branch */}
-                        <div className="w-36 shrink-0">
-                          <div className="relative">
-                            <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                            <Input
-                              placeholder="branch"
-                              value={entry.branch}
-                              onChange={e => updateEntry(idx, { branch: e.target.value })}
-                              className="bg-black/30 border-white/10 text-sm pl-8 w-full"
-                              disabled={entry.status === "fetching" || entry.status === "saved"}
-                            />
-                          </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="relative">
+                          <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                          <Input
+                            placeholder="https://github.com/owner/repo  or  …/tree/branchname"
+                            value={entry.url}
+                            onChange={e => updateEntry(idx, { url: e.target.value, status: "idle", error: undefined })}
+                            className="bg-black/30 border-white/10 font-mono text-sm pl-9 w-full"
+                            disabled={entry.status === "fetching" || entry.status === "saved"}
+                          />
                         </div>
                       </div>
 
@@ -486,7 +453,7 @@ export function RepositoriesTab({ analysisId, onRepoAdded }: Props) {
                           <FormLabel>Backend Source Code</FormLabel>
                           <FormControl>
                             <Textarea
-                              placeholder="Paste Python, TypeScript, or JavaScript backend code here..."
+                              placeholder="Paste backend source code here (Python, Go, Java, Rust, TypeScript, Ruby…)"
                               className="h-56 font-mono text-xs bg-black/50 border-white/10 resize-y"
                               {...field}
                             />

@@ -44,7 +44,7 @@ export default function CreateAnalysisDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Create Analysis Session</DialogTitle>
           <DialogDescription>
-            Start a new Python codebase analysis. You can import repositories in the next step.
+            Start a new codebase analysis. Import repositories from GitHub or paste code in the next step.
           </DialogDescription>
         </DialogHeader>
         
@@ -70,7 +70,7 @@ export default function CreateAnalysisDialog({ open, onOpenChange }: Props) {
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Context about this Python codebase..." className="resize-none bg-black/20" {...field} />
+                    <Textarea placeholder="Context about this codebase (optional)..." className="resize-none bg-black/20" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
