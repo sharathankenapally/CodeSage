@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "gmNcrm_DZxXEBC-3--K5v"
+uri = "file://codesage-poc.md"
+type = "text"
+title = "CodeSage — Proof of Concept Document"
