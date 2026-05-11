@@ -176,7 +176,7 @@ router.post("/github/fetch", async (req: Request, res: Response): Promise<void> 
   }
 
   const { repoUrl, branch, githubToken, maxFiles } = parsed.data;
-  const limit = maxFiles ?? 100;
+  const limit = maxFiles ?? 60;
 
   const parts = parseGithubUrl(repoUrl);
   if (!parts) {

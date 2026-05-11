@@ -302,7 +302,7 @@ async function runStep(
   res.write(`data: ${JSON.stringify({ step, stepName, status: "starting" })}\n\n`);
 
   const stream = await openrouter.chat.completions.create({
-    model: "nvidia/nemotron-3-super-120b-a12b:free",
+    model: "google/gemini-2.0-flash-exp:free",
     max_tokens: 4096,
     messages: [
       {
