@@ -173,18 +173,15 @@ Instructions:
 5. Decompose large if/else chains — each branch is usually its own rule`;
   },
 
-  4: (repos, previousResults) => {
-    const lang = detectLanguages(repos.map(r => r.javaCode).join("\n"));
-    return `You are an expert software architect analyzing a ${lang} codebase.
+  4: (_repos, previousResults) => {
+    return `You are an expert software architect.
 
 ## STEP 4 — Memory & State Dependency Map
 
-Steps 1–3 results:
+Based on the full analysis below, identify all in-memory state, module-level variables, and stateful dependencies discovered in Steps 1–3.
+
+Prior analysis:
 ${previousResults}
-
-Identify all in-memory state, module-level variables, and stateful dependencies:
-
-${repos.map(codeBlock).join("\n\n")}
 
 For each module that holds or mutates state (maps, dicts, arrays, class fields, global/module-level vars, caches), produce:
 
@@ -201,20 +198,15 @@ If a module has no in-memory state, state that explicitly.
 Also identify any cross-module shared state (variables exported and imported by multiple files).`;
   },
 
-  5: (repos, previousResults) => {
-    const lang = detectLanguages(repos.map(r => r.javaCode).join("\n"));
-    return `You are an expert software architect analyzing a ${lang} codebase.
+  5: (_repos, previousResults) => {
+    return `You are an expert software architect.
 
 ## STEP 5 — Microservice Grouping Proposal
 
-Steps 1–4 results:
+Using the full prior analysis below, group the extracted business rules into logical service boundaries using domain-driven design principles. Group by bounded context (business domain), NOT by technical layer.
+
+Prior analysis:
 ${previousResults}
-
-Group the extracted business rules into logical service boundaries using domain-driven design principles:
-
-${repos.map(codeBlock).join("\n\n")}
-
-Group by bounded context (business domain), NOT by technical layer.
 
 For each proposed service or module produce:
 
@@ -230,18 +222,15 @@ For each proposed service or module produce:
 End with a plain-text **Dependency Graph** showing how services relate to each other.`;
   },
 
-  6: (repos, previousResults) => {
-    const lang = detectLanguages(repos.map(r => r.javaCode).join("\n"));
-    return `You are an expert software architect analyzing a ${lang} codebase.
+  6: (_repos, previousResults) => {
+    return `You are an expert software architect.
 
 ## STEP 6 — Requirements Document
 
+Generate a complete requirements document in plain English from the analysis below. No code, no implementation details.
+
 Full prior analysis:
 ${previousResults}
-
-Generate a complete requirements document in plain English. No code, no implementation details.
-
-${repos.map(codeBlock).join("\n\n")}
 
 ---
 
@@ -314,7 +303,7 @@ async function runStep(
 
   const stream = await openrouter.chat.completions.create({
     model: "nvidia/nemotron-3-super-120b-a12b:free",
-    max_tokens: 8192,
+    max_tokens: 4096,
     messages: [
       {
         role: "system",
