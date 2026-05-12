@@ -130,16 +130,13 @@ pnpm --filter @workspace/java-modernization run dev
 
 1. Paste any GitHub URL — with or without a branch (`/tree/branchname`)
 2. Server fetches the full file tree via the GitHub API
-3. Files are filtered: only backend source files pass through (tests, configs, lock files, UI files, vendor directories are all excluded)
-4. Up to 60 files are fetched in parallel batches of 10
-5. Each file is prefixed with its path so the AI knows what it is reading
-6. The concatenated code is stored in PostgreSQL
+3. The concatenated code is stored in PostgreSQL
 
 ### AI Pipeline
 
 Each of the 6 steps is a separate call to the language model via OpenRouter. Steps build on each other — the output of each step is passed as context to the next. Steps 1–3 include the full source code; Steps 4–6 work only from prior analysis results (reducing prompt size by over 50% for the second half of the pipeline).
 
-Results stream to the browser token-by-token via Server-Sent Events and are saved to PostgreSQL as each step completes, so sessions survive page reloads.
+Results are saved to PostgreSQL as each step completes, so sessions survive page reloads.
 
 ### Guardrails
 
@@ -166,16 +163,6 @@ Results stream to the browser token-by-token via Server-Sent Events and are save
 | GET | `/api/analyses/:id/results` | Get all step results |
 | POST | `/api/analyze/:id/full` | Run all 6 steps (SSE stream) |
 | POST | `/api/analyze/:id/step/:step` | Run a single step (SSE stream) |
-
----
-
-## Database Schema
-
-```
-analyses          — id, name, description, status, currentStep, timestamps
-repositories      — id, analysisId, name, javaCode (source), packageStructure
-analysis_results  — id, analysisId, step, stepName, content (markdown)
-```
 
 ---
 
