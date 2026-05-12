@@ -26,41 +26,397 @@ CodeSage eliminates this bottleneck entirely.
 
 ---
 
-## What CodeSage Does
+## System Architecture Diagram
 
-The application accepts a GitHub repository URL or a block of pasted source code. It connects to GitHub's API, pulls down all relevant backend source files, filters out noise such as test files, configuration files, and framework boilerplate, and feeds the real application code into a six-step AI analysis pipeline.
+The following diagram shows how all layers of CodeSage connect — from the user's browser through to the AI provider.
 
-Each step of the pipeline is handled by a large language model that has been prompted to perform a specific type of analysis. The steps build on each other — the output of step one becomes part of the input for step two, and so on. By the time the pipeline finishes, the user has a complete, structured document covering every significant aspect of the codebase from a business perspective.
-
-The entire process happens in the browser with real-time streaming. Users watch the analysis unfold token by token, step by step, rather than staring at a loading screen. Every result is saved to a database, so sessions persist across page loads and users can return to review or share their findings at any time.
+```
+╔══════════════════════════════════════════════════════════════════════╗
+║                          USER'S BROWSER                              ║
+║                                                                      ║
+║   ┌─────────────┐   ┌──────────────────┐   ┌──────────────────────┐ ║
+║   │   Sidebar   │   │  Repositories    │   │   Results / Stream   │ ║
+║   │  (Sessions) │   │  (GitHub/Paste)  │   │   (Live SSE view)    │ ║
+║   └─────────────┘   └──────────────────┘   └──────────────────────┘ ║
+║                                                                      ║
+║   React 18 · Vite 7 · TypeScript · TanStack Query · Tailwind CSS    ║
+╚══════════════════════╦═══════════════════════════════════════════════╝
+                       ║  HTTP / Server-Sent Events (SSE)
+╔══════════════════════╩═══════════════════════════════════════════════╗
+║                       EXPRESS API SERVER                             ║
+║                     Node.js · TypeScript                             ║
+║                                                                      ║
+║   ┌──────────────────┐  ┌─────────────────┐  ┌──────────────────┐   ║
+║   │  /github/fetch   │  │  /analyses/*    │  │ /analyze/:id/    │   ║
+║   │  GitHub import   │  │  CRUD sessions  │  │ full  (pipeline) │   ║
+║   └────────┬─────────┘  └────────┬────────┘  └────────┬─────────┘   ║
+║            │                     │                     │             ║
+╚════════════╪═════════════════════╪═════════════════════╪═════════════╝
+             │                     │                     │
+             ▼                     ▼                     ▼
+╔════════════════════╗   ╔═════════════════╗   ╔════════════════════╗
+║   GITHUB REST API  ║   ║   POSTGRESQL    ║   ║    OPENROUTER      ║
+║                    ║   ║                 ║   ║                    ║
+║  • Repo tree       ║   ║  analyses       ║   ║  Model:            ║
+║  • File contents   ║   ║  repositories   ║   ║  nvidia/nemotron   ║
+║  • Branch info     ║   ║  results        ║   ║  -3-super-120B     ║
+║                    ║   ║  (Drizzle ORM)  ║   ║  (free tier)       ║
+╚════════════════════╝   ╚═════════════════╝   ╚════════════════════╝
+```
 
 ---
 
-## The Six Analysis Steps
+## GitHub Import Flow
 
-**Step 1 — Repository Discovery**
+When a user submits a GitHub URL, the following sequence of steps runs on the server before a single line of code reaches the AI:
 
-The first step gives the model a full view of what it is working with. It produces a structured table listing every source file, its purpose, and how many functions and classes it contains. It identifies the third-party libraries and frameworks the codebase depends on. It ends with a plain-language summary of what the system does overall. This step is the foundation that all subsequent steps are built upon.
+```
+User submits GitHub URL
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  Parse URL                          │
+│  Extract: owner / repo / branch     │
+│  Supports all formats:              │
+│  • github.com/owner/repo            │
+│  • github.com/owner/repo/tree/main  │
+│  • git@github.com:owner/repo.git    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  No branch in URL?                  │
+│  → Call GitHub API: GET /repos      │
+│    to fetch default_branch          │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Fetch full file tree               │
+│  GET /repos/:owner/:repo/git/trees  │
+│  /:branch?recursive=1               │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Filter files — keep ONLY backend source files              │
+│                                                             │
+│  ✅ Keep:  .py .go .java .kt .rs .cs .cpp .rb .php         │
+│            .ts .js .swift .ex .scala .sql .proto .graphql   │
+│                                                             │
+│  ❌ Drop:  .tsx .jsx .vue .css .html (UI files)             │
+│  ❌ Drop:  node_modules / vendor / target / dist / build    │
+│  ❌ Drop:  .test. .spec. .stories. (test files)             │
+│  ❌ Drop:  tsconfig / jest.config / webpack.config (config) │
+│  ❌ Drop:  package-lock / go.sum / Cargo.lock (lock files)  │
+│  ❌ Drop:  .min. / .d.ts / generated / migrations           │
+└──────────────┬──────────────────────────────────────────────┘
+               │
+               ▼  (up to 60 files pass through)
+┌─────────────────────────────────────┐
+│  Fetch file contents                │
+│  In parallel batches of 10          │
+│  Decode base64 → UTF-8 text         │
+│  Prefix each file:                  │
+│  "# ===== FILE: src/billing.py =====" │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Concatenate all files              │
+│  Build directory tree structure     │
+│  Store in PostgreSQL                │
+│  Return to frontend                 │
+└─────────────────────────────────────┘
+```
 
-**Step 2 — Business Logic Classification**
+**Error handling at each stage:**
 
-Not all code is equal from a business perspective. A function that validates whether a discount exceeds a maximum threshold is a business rule. A function that queries the database to retrieve a customer record is infrastructure. Step two goes through every function and method found in step one and assigns it a category: Business Rule, Orchestration, Data Access, Infrastructure, or UI. Only the first two categories are carried forward into the deeper analysis. Everything else is acknowledged and set aside.
+```
+URL invalid            → "Invalid GitHub URL. Expected: github.com/owner/repo"
+Repo not found (404)   → "Repository not found. Check spelling or add a token."
+Auth failed (401)      → "GitHub authentication failed. Provide a valid PAT token."
+Rate limited (403)     → "GitHub API rate limit reached. Add a token to increase limits."
+Branch not found       → "Branch 'xyz' not found. Check the branch name."
+No source files found  → "No supported files found. Files seen: [list]"
+Files unreadable       → "Found N files but couldn't read content. Possible rate limit."
+```
 
-**Step 3 — Business Rule Extraction**
+---
 
-This is the heart of the pipeline. For every function classified as a business rule or orchestration logic in step two, the model produces a structured entry that describes the rule in plain English — what it does, what inputs it requires, what decision or output it produces, and what edge cases or conditions it handles. Each rule is also tagged with a suggested owning service, which feeds directly into the microservice grouping in step five.
+## The Six-Step AI Pipeline
 
-**Step 4 — Memory and State Dependency Map**
+Each step is a separate call to the language model. The results accumulate and are passed forward as context. Steps 1–3 include the source code. Steps 4–6 work only from the prior analysis, keeping prompt sizes manageable.
 
-Modern systems often carry hidden complexity in the form of global variables, in-memory caches, module-level dictionaries, and singleton objects. These are the kinds of things that break apart when a monolith is split into services, because suddenly the shared state that everything depended on no longer exists in a single process. Step four identifies every piece of in-memory state in the codebase, explains what depends on it, and recommends how it should be handled in a distributed architecture — whether that means moving it to a Redis cache, persisting it in a database table, or restructuring it to be passed as a function argument.
+```
+                    ┌─────────────────────────────┐
+                    │       SOURCE CODE            │
+                    │  (stored in PostgreSQL)      │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │         STEP 1               │
+                    │   Repository Discovery       │◄─── Full source code
+                    │                             │
+                    │  Output:                    │
+                    │  • File inventory table     │
+                    │  • Class & function list    │
+                    │  • Third-party dependencies │
+                    │  • Codebase summary         │
+                    └──────────────┬──────────────┘
+                                   │ Step 1 output
+                    ┌──────────────▼──────────────┐
+                    │         STEP 2               │
+                    │  Business Logic              │◄─── Full source code
+                    │  Classification              │◄─── Step 1 results
+                    │                             │
+                    │  Output: Every function      │
+                    │  labelled as one of:         │
+                    │  ✅ Business Rule            │
+                    │  ✅ Orchestration            │
+                    │  ❌ Data Access (excluded)   │
+                    │  ❌ Infrastructure (excluded) │
+                    │  ❌ UI (excluded)            │
+                    └──────────────┬──────────────┘
+                                   │ Steps 1–2 output
+                    ┌──────────────▼──────────────┐
+                    │         STEP 3               │
+                    │  Business Rule Extraction    │◄─── Full source code
+                    │                             │◄─── Steps 1–2 results
+                    │  For each ✅ function:       │
+                    │  • Plain-English description │
+                    │  • Inputs & outputs          │
+                    │  • Edge cases & conditions   │
+                    │  • Suggested owning service  │
+                    └──────────────┬──────────────┘
+                                   │ Steps 1–3 output
+                    ┌──────────────▼──────────────┐
+                    │         STEP 4               │
+                    │  Memory & State              │◄─── Steps 1–3 results only
+                    │  Dependency Map              │     (no code re-send)
+                    │                             │
+                    │  Output: Every global var,  │
+                    │  cache, shared state with   │
+                    │  migration recommendation   │
+                    └──────────────┬──────────────┘
+                                   │ Steps 1–4 output
+                    ┌──────────────▼──────────────┐
+                    │         STEP 5               │
+                    │  Microservice Grouping       │◄─── Steps 1–4 results only
+                    │  Proposal (DDD)              │     (no code re-send)
+                    │                             │
+                    │  Output: Service boundaries, │
+                    │  API contracts, dependency  │
+                    │  graph between services      │
+                    └──────────────┬──────────────┘
+                                   │ All prior results
+                    ┌──────────────▼──────────────┐
+                    │         STEP 6               │
+                    │  Requirements Document       │◄─── All prior results only
+                    │                             │     (no code re-send)
+                    │  Output: Executive summary, │
+                    │  functional requirements,   │
+                    │  business rules (plain eng),│
+                    │  API contracts, flagged ⚠️  │
+                    └─────────────────────────────┘
+```
 
-**Step 5 — Microservice Grouping Proposal**
+---
 
-Using the business rules from step three and the state map from step four, the model proposes a set of logical service boundaries grounded in Domain-Driven Design principles. Each proposed service is described with a clear statement of its responsibility, the business rules it owns, the data it requires, the APIs it would expose, and its dependencies on other services. The step ends with a plain-text dependency graph showing how the proposed services relate to each other.
+## End-to-End User Flow
 
-**Step 6 — Requirements Document**
+This is the complete journey from a user opening CodeSage to receiving a finished requirements document:
 
-The final step synthesizes everything into a formal requirements document written in plain English, with no code and no technical implementation details. This is the document that a product manager, a compliance officer, or a new engineering team can read and immediately understand. It includes an executive summary, functional requirements organized by service, business rule descriptions, data requirements, API contracts, and a section flagging any areas where human judgment is needed because the code's intent was ambiguous.
+```
+  USER                    FRONTEND                  API SERVER              EXTERNAL
+   │                         │                          │                      │
+   │  Open CodeSage          │                          │                      │
+   │────────────────────────►│                          │                      │
+   │                         │  GET /api/analyses       │                      │
+   │                         │─────────────────────────►│                      │
+   │                         │  [ ] empty list          │                      │
+   │◄────────────────────────│◄─────────────────────────│                      │
+   │                         │                          │                      │
+   │  Click "New Analysis"   │                          │                      │
+   │────────────────────────►│                          │                      │
+   │  Enter session name     │  POST /api/analyses      │                      │
+   │                         │─────────────────────────►│                      │
+   │                         │  { id: 1, status:        │                      │
+   │◄────────────────────────│◄── "pending" }           │                      │
+   │  Redirect to /analysis/1│                          │                      │
+   │                         │                          │                      │
+   │  Paste GitHub URL       │                          │                      │
+   │────────────────────────►│                          │                      │
+   │  Click "Import"         │  POST /api/github/fetch  │                      │
+   │                         │─────────────────────────►│  GET /repos tree     │
+   │                         │                          │─────────────────────►│
+   │                         │                          │  GET /contents x60   │
+   │                         │                          │◄─────────────────────│
+   │                         │  POST /analyses/1/repos  │                      │
+   │                         │─────────────────────────►│  INSERT to DB        │
+   │◄────────────────────────│◄── { fileCount: 47 }     │                      │
+   │  See repo card appear   │                          │                      │
+   │                         │                          │                      │
+   │  Click "Run Analysis"   │                          │                      │
+   │────────────────────────►│  POST /analyze/1/full    │                      │
+   │                         │─────────────────────────►│                      │
+   │                         │                          │                      │
+   │  ┌─ STEP 1 starts ─┐   │◄── SSE: stepTransition   │                      │
+   │  │ tokens stream   │◄──│◄── SSE: content chunks   │──► OpenRouter API    │
+   │  │ in real time    │   │                          │◄── stream tokens      │
+   │  └─────────────────┘   │◄── SSE: stepComplete     │   save to DB         │
+   │                         │                          │                      │
+   │  ┌─ STEP 2 starts ─┐   │◄── SSE: stepTransition   │                      │
+   │  │ tokens stream   │◄──│◄── SSE: content chunks   │──► OpenRouter API    │
+   │  └─────────────────┘   │◄── SSE: stepComplete     │◄── stream tokens     │
+   │                         │                          │   save to DB         │
+   │       ... steps 3, 4, 5 follow the same pattern ...│                      │
+   │                         │                          │                      │
+   │  ┌─ STEP 6 done ───┐   │◄── SSE: done             │                      │
+   │  │ Results tab     │   │  invalidate queries       │                      │
+   │  │ fully rendered  │   │  GET /analyses/1/results  │                      │
+   │  └─────────────────┘   │─────────────────────────►│  SELECT from DB      │
+   │◄────────────────────────│◄── all 6 step results    │                      │
+   │  Download / share       │                          │                      │
+```
+
+---
+
+## SSE Streaming Protocol
+
+The frontend and backend communicate over a single long-lived HTTP connection using Server-Sent Events. Each event is a line prefixed with `data:` containing a JSON payload:
+
+```
+Server ──────────────────────────────────────────────────────► Browser
+
+  data: {"step": 1, "stepName": "Repository Discovery", "status": "starting"}
+
+  data: {"content": "## Repository Inventory\n\n### src/billing.py\n"}
+  data: {"content": "| Module | Purpose | Classes | Functions |\n"}
+  data: {"content": "|--------|---------|---------|----------|\n"}
+  data: {"content": "| billing.py | Handles invoices | 2 | 14 |\n"}
+        ... (hundreds of content chunks stream here) ...
+
+  data: {"stepComplete": true, "step": 1, "stepName": "Repository Discovery"}
+
+  data: {"step": 2, "stepName": "Business Logic Classification", "status": "starting"}
+        ... (step 2 streams) ...
+
+  data: {"stepComplete": true, "step": 2, "stepName": "Business Logic Classification"}
+
+        ... steps 3 through 6 follow ...
+
+  data: {"done": true, "allStepsComplete": true}
+```
+
+Each `stepComplete` event triggers the frontend to refresh from the database, ensuring results are always persisted even if the browser disconnects.
+
+---
+
+## Data Model
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                        analyses                          │
+├──────────────────────────────────────────────────────────┤
+│  id            INTEGER  PRIMARY KEY                      │
+│  name          TEXT     "Payment Service Analysis"       │
+│  description   TEXT     optional context                 │
+│  status        TEXT     pending|in_progress|completed    │
+│                         |failed                          │
+│  currentStep   INTEGER  1–6 (updated live)               │
+│  createdAt     TIMESTAMP                                 │
+│  updatedAt     TIMESTAMP                                 │
+└──────────────────┬───────────────────────────────────────┘
+                   │ 1:many
+┌──────────────────▼───────────────────────────────────────┐
+│                      repositories                        │
+├──────────────────────────────────────────────────────────┤
+│  id              INTEGER  PRIMARY KEY                    │
+│  analysisId      INTEGER  FK → analyses.id               │
+│  name            TEXT     "owner/repo"                   │
+│  javaCode        TEXT     concatenated source files      │
+│  packageStructure TEXT    ASCII directory tree           │
+│  createdAt       TIMESTAMP                               │
+└──────────────────┬───────────────────────────────────────┘
+                   │ via analysisId
+┌──────────────────▼───────────────────────────────────────┐
+│                    analysis_results                      │
+├──────────────────────────────────────────────────────────┤
+│  id            INTEGER  PRIMARY KEY                      │
+│  analysisId    INTEGER  FK → analyses.id                 │
+│  step          INTEGER  1–6                              │
+│  stepName      TEXT     "Repository Discovery" etc.      │
+│  content       TEXT     full Markdown output of step     │
+│  createdAt     TIMESTAMP                                 │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## File Filtering Logic
+
+```
+                 Raw GitHub file tree
+                         │
+            ┌────────────▼────────────┐
+            │  Is it a blob (file)?   │──── No ──► skip (directory)
+            └────────────┬────────────┘
+                         │ Yes
+            ┌────────────▼────────────┐
+            │  Path contains ignored  │
+            │  directory segment?     │──── Yes ──► skip
+            │  (node_modules, vendor, │
+            │   target, dist, build,  │
+            │   .git, venv, coverage, │
+            │   __pycache__, etc.)    │
+            └────────────┬────────────┘
+                         │ No
+            ┌────────────▼────────────┐
+            │  Extension is a UI      │
+            │  file type?             │──── Yes ──► skip
+            │  (.tsx .jsx .vue .css   │
+            │   .html .scss .svelte)  │
+            └────────────┬────────────┘
+                         │ No
+            ┌────────────▼────────────┐
+            │  Filename matches       │
+            │  ignore pattern?        │──── Yes ──► skip
+            │  (.test. .spec.         │
+            │   .min. tsconfig        │
+            │   jest.config lock      │
+            │   files .d.ts etc.)     │
+            └────────────┬────────────┘
+                         │ No
+            ┌────────────▼────────────┐
+            │  Extension in backend   │
+            │  supported set?         │──── No ──► skip
+            │  (.py .go .java .ts     │
+            │   .rs .cs .rb .php …)   │
+            └────────────┬────────────┘
+                         │ Yes
+                         ▼
+               ✅ File passes — fetch content
+```
+
+---
+
+## Prompt Optimization Strategy
+
+One of the most important engineering decisions in the pipeline is how context is managed across the six steps. Naively passing everything to every step would make later prompts enormous and slow.
+
+```
+Step  │ Source Code Sent │ Prior Results Sent │ Approx. Prompt Size
+──────┼──────────────────┼────────────────────┼────────────────────
+  1   │      ✅ Yes      │       None         │  ~15,000 tokens
+  2   │      ✅ Yes      │    Step 1 only     │  ~20,000 tokens
+  3   │      ✅ Yes      │    Steps 1–2       │  ~25,000 tokens
+  4   │      ❌ No       │    Steps 1–3       │  ~12,000 tokens
+  5   │      ❌ No       │    Steps 1–4       │  ~16,000 tokens
+  6   │      ❌ No       │    Steps 1–5       │  ~20,000 tokens
+```
+
+By step four the model has already fully processed the source code in three prior passes. Re-sending it would double the prompt size with no gain in quality. This optimization cuts token usage for the second half of the pipeline by more than fifty percent.
 
 ---
 
@@ -76,18 +432,6 @@ All analysis results are persisted to PostgreSQL as each step completes, meaning
 
 ---
 
-## GitHub Integration
-
-When a user provides a GitHub URL, the server parses it to extract the repository owner, repository name, and optional branch name. It supports every common GitHub URL format, including URLs that embed the branch in a `/tree/branchname` path. It then calls the GitHub API to retrieve the complete file tree of the repository.
-
-Before any file is read, a filtering pass removes everything that does not belong in a business logic analysis. This includes all test files, configuration files, lock files, build output directories, third-party vendor directories, generated code, and UI component files. Only genuine backend source files proceed to the next stage.
-
-Up to sixty files are then fetched in parallel batches of ten, each prefixed with a comment that tells the AI which file it is reading. This structured labeling means the model understands the file layout and can reference specific files in its analysis. The resulting code is stored in the database and used as the input to the pipeline.
-
-The system supports more than twenty backend languages, covering Python, Go, Java, Kotlin, Scala, Rust, C#, C, C++, Ruby, PHP, TypeScript, JavaScript, Swift, Elixir, Erlang, Haskell, Dart, Lua, Clojure, Shell scripts, SQL, GraphQL schema files, and Protocol Buffer definitions.
-
----
-
 ## Safeguards and Reliability
 
 Several engineering decisions were made specifically to ensure the system handles real-world use cases gracefully.
@@ -98,15 +442,13 @@ GitHub token handling is deliberately conservative. The system never uses an env
 
 Error messages from the GitHub integration are specific and actionable. Rather than a generic failure notice, users see messages that distinguish between an invalid URL, a repository that does not exist, a branch that was not found, a rate limit that has been reached, and an authentication failure for a private repository.
 
-Steps four, five, and six of the pipeline do not re-send the raw source code to the model. By that point in the analysis the code has already been fully processed, and including it again would dramatically increase the size and cost of each subsequent prompt without improving the output quality. This optimization alone reduces the token count for the second half of the pipeline by more than fifty percent.
-
 The model is capped at four thousand tokens of output per step. This is still more than enough for thorough analysis while preventing runaway generation that would slow down the pipeline unnecessarily.
 
 ---
 
 ## What the Output Looks Like
 
-By the time the pipeline completes, the user has six structured sections covering every dimension of their codebase from a business perspective. The final requirements document, which is the most shareable artifact, reads like something a senior architect and a technical writer produced together. It can be downloaded as Markdown, copied into a Confluence page, pasted into a Jira epic, or handed directly to a product manager.
+By the time the pipeline completes, the user has six structured sections covering every dimension of their codebase from a business perspective. The final requirements document, which is the most shareable artifact, reads like something a senior architect and a technical writer produced together. It can be copied into a Confluence page, pasted into a Jira epic, or handed directly to a product manager.
 
 The flagged items section is particularly valuable in practice. Any function whose business purpose was unclear, any rule that appeared to mix domain logic with data access, or any threshold constant whose meaning was ambiguous will be marked with a human review notice and a brief explanation of what the model was uncertain about. This gives the review team a focused list of questions rather than asking them to read everything themselves.
 
@@ -137,6 +479,36 @@ The immediate next priorities are exporting results as PDF documents, adding sup
 Medium-term priorities include direct integration with Jira to push requirements as epics and stories, a diff mode that compares two versions of a codebase and highlights which business rules changed, and a webhook trigger that automatically runs an analysis whenever new code is pushed to a repository.
 
 Longer-term, the most valuable evolution of the product would be a fine-tuned model specifically trained on enterprise codebase analysis, which would produce more consistent and domain-specific output than a general-purpose foundation model.
+
+---
+
+## Tech Stack Summary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CODESAGE STACK                         │
+├─────────────────┬───────────────────────────────────────────┤
+│ Frontend        │ React 18 · Vite 7 · TypeScript            │
+│                 │ Tailwind CSS v4 · shadcn/ui               │
+│                 │ TanStack React Query · Framer Motion       │
+│                 │ Wouter (routing) · Lucide icons            │
+├─────────────────┼───────────────────────────────────────────┤
+│ Backend         │ Node.js · Express · TypeScript            │
+│                 │ Server-Sent Events (SSE)                   │
+├─────────────────┼───────────────────────────────────────────┤
+│ Database        │ PostgreSQL (managed)                       │
+│                 │ Drizzle ORM                                │
+├─────────────────┼───────────────────────────────────────────┤
+│ AI Provider     │ OpenRouter (openrouter.ai)                 │
+│                 │ OpenAI-compatible SDK                      │
+│ Model           │ nvidia/nemotron-3-super-120B:free          │
+│ Max tokens/step │ 4,096                                      │
+├─────────────────┼───────────────────────────────────────────┤
+│ Infrastructure  │ Replit (monorepo hosting)                  │
+│ Package Manager │ pnpm workspaces                            │
+│ Language        │ TypeScript throughout (frontend + backend) │
+└─────────────────┴───────────────────────────────────────────┘
+```
 
 ---
 
