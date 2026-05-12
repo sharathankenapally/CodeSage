@@ -98,27 +98,9 @@ User submits GitHub URL
 └──────────────┬──────────────────────┘
                │
                ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Filter files — keep ONLY backend source files              │
-│                                                             │
-│  ✅ Keep:  .py .go .java .kt .rs .cs .cpp .rb .php         │
-│            .ts .js .swift .ex .scala .sql .proto .graphql   │
-│                                                             │
-│  ❌ Drop:  .tsx .jsx .vue .css .html (UI files)             │
-│  ❌ Drop:  node_modules / vendor / target / dist / build    │
-│  ❌ Drop:  .test. .spec. .stories. (test files)             │
-│  ❌ Drop:  tsconfig / jest.config / webpack.config (config) │
-│  ❌ Drop:  package-lock / go.sum / Cargo.lock (lock files)  │
-│  ❌ Drop:  .min. / .d.ts / generated / migrations           │
-└──────────────┬──────────────────────────────────────────────┘
-               │
-               ▼  (up to 60 files pass through)
 ┌─────────────────────────────────────┐
 │  Fetch file contents                │
-│  In parallel batches of 10          │
 │  Decode base64 → UTF-8 text         │
-│  Prefix each file:                  │
-│  "# ===== FILE: src/billing.py =====" │
 └──────────────┬──────────────────────┘
                │
                ▼
@@ -278,125 +260,6 @@ This is the complete journey from a user opening CodeSage to receiving a finishe
    │  └─────────────────┘   │─────────────────────────►│  SELECT from DB      │
    │◄────────────────────────│◄── all 6 step results    │                      │
    │  Download / share       │                          │                      │
-```
-
----
-
-## SSE Streaming Protocol
-
-The frontend and backend communicate over a single long-lived HTTP connection using Server-Sent Events. Each event is a line prefixed with `data:` containing a JSON payload:
-
-```
-Server ──────────────────────────────────────────────────────► Browser
-
-  data: {"step": 1, "stepName": "Repository Discovery", "status": "starting"}
-
-  data: {"content": "## Repository Inventory\n\n### src/billing.py\n"}
-  data: {"content": "| Module | Purpose | Classes | Functions |\n"}
-  data: {"content": "|--------|---------|---------|----------|\n"}
-  data: {"content": "| billing.py | Handles invoices | 2 | 14 |\n"}
-        ... (hundreds of content chunks stream here) ...
-
-  data: {"stepComplete": true, "step": 1, "stepName": "Repository Discovery"}
-
-  data: {"step": 2, "stepName": "Business Logic Classification", "status": "starting"}
-        ... (step 2 streams) ...
-
-  data: {"stepComplete": true, "step": 2, "stepName": "Business Logic Classification"}
-
-        ... steps 3 through 6 follow ...
-
-  data: {"done": true, "allStepsComplete": true}
-```
-
-Each `stepComplete` event triggers the frontend to refresh from the database, ensuring results are always persisted even if the browser disconnects.
-
----
-
-## Data Model
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                        analyses                          │
-├──────────────────────────────────────────────────────────┤
-│  id            INTEGER  PRIMARY KEY                      │
-│  name          TEXT     "Payment Service Analysis"       │
-│  description   TEXT     optional context                 │
-│  status        TEXT     pending|in_progress|completed    │
-│                         |failed                          │
-│  currentStep   INTEGER  1–6 (updated live)               │
-│  createdAt     TIMESTAMP                                 │
-│  updatedAt     TIMESTAMP                                 │
-└──────────────────┬───────────────────────────────────────┘
-                   │ 1:many
-┌──────────────────▼───────────────────────────────────────┐
-│                      repositories                        │
-├──────────────────────────────────────────────────────────┤
-│  id              INTEGER  PRIMARY KEY                    │
-│  analysisId      INTEGER  FK → analyses.id               │
-│  name            TEXT     "owner/repo"                   │
-│  javaCode        TEXT     concatenated source files      │
-│  packageStructure TEXT    ASCII directory tree           │
-│  createdAt       TIMESTAMP                               │
-└──────────────────┬───────────────────────────────────────┘
-                   │ via analysisId
-┌──────────────────▼───────────────────────────────────────┐
-│                    analysis_results                      │
-├──────────────────────────────────────────────────────────┤
-│  id            INTEGER  PRIMARY KEY                      │
-│  analysisId    INTEGER  FK → analyses.id                 │
-│  step          INTEGER  1–6                              │
-│  stepName      TEXT     "Repository Discovery" etc.      │
-│  content       TEXT     full Markdown output of step     │
-│  createdAt     TIMESTAMP                                 │
-└──────────────────────────────────────────────────────────┘
-```
-
----
-
-## File Filtering Logic
-
-```
-                 Raw GitHub file tree
-                         │
-            ┌────────────▼────────────┐
-            │  Is it a blob (file)?   │──── No ──► skip (directory)
-            └────────────┬────────────┘
-                         │ Yes
-            ┌────────────▼────────────┐
-            │  Path contains ignored  │
-            │  directory segment?     │──── Yes ──► skip
-            │  (node_modules, vendor, │
-            │   target, dist, build,  │
-            │   .git, venv, coverage, │
-            │   __pycache__, etc.)    │
-            └────────────┬────────────┘
-                         │ No
-            ┌────────────▼────────────┐
-            │  Extension is a UI      │
-            │  file type?             │──── Yes ──► skip
-            │  (.tsx .jsx .vue .css   │
-            │   .html .scss .svelte)  │
-            └────────────┬────────────┘
-                         │ No
-            ┌────────────▼────────────┐
-            │  Filename matches       │
-            │  ignore pattern?        │──── Yes ──► skip
-            │  (.test. .spec.         │
-            │   .min. tsconfig        │
-            │   jest.config lock      │
-            │   files .d.ts etc.)     │
-            └────────────┬────────────┘
-                         │ No
-            ┌────────────▼────────────┐
-            │  Extension in backend   │
-            │  supported set?         │──── No ──► skip
-            │  (.py .go .java .ts     │
-            │   .rs .cs .rb .php …)   │
-            └────────────┬────────────┘
-                         │ Yes
-                         ▼
-               ✅ File passes — fetch content
 ```
 
 ---
